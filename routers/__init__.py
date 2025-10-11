@@ -1,0 +1,1 @@
+from .v1 import versionRouter as apiv1_router
