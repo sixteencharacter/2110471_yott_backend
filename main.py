@@ -3,7 +3,9 @@ import config
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from routers import apiv1_router
+from socket_server import socket_app
 
 app = FastAPI()
 
@@ -18,6 +20,8 @@ app.add_middleware(
 )
 
 app.mount("/v1",apiv1_router)
+app.mount("/socket.io/",socket_app)
+app.mount("/public",StaticFiles(directory="public"),name="public")
 
 @app.get("/")
 async def ping() :
