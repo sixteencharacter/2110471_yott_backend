@@ -208,3 +208,5 @@ __marimo__/
 
 # keycloak data
 keycloak
+
+.DS_STORE
