@@ -1,0 +1,45 @@
+name : yott-docker
+services:
+  keycloak:
+    restart : always
+    image: keycloak/keycloak:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/data:/opt/keycloak/data
+      - ./keycloak/conf:/opt/keycloak/conf
+      - ./keycloak/themes:/opt/keycloak/themes
+    environment :
+      KEYCLOAK_ADMIN : yott
+      KEYCLOAK_ADMIN_PASSWORD : strongpassword
+      KC_HOSTNAME_STRICT_HTTPS: false
+    command : 
+      - start-dev
+
+  db:
+      image: postgres
+      restart: always
+      shm_size: 128mb
+      environment:
+          POSTGRES_PASSWORD: strongpassword
+          POSTGRES_USER: yott
+          POSTGRES_DB: yottdb
+      ports:
+          - 5435:5432
+      volumes:
+          - pgdata:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4
+    restart: always
+    environment:
+        PGADMIN_DEFAULT_EMAIL: admin@example.com
+        PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+        - 5555:80
+    depends_on:
+        - db
+
+volumes:
+    pgdata:
+
