@@ -17,7 +17,7 @@ sio=socketio.AsyncServer(cors_allowed_origins=[],allow_upgrades=True,async_mode=
 socket_app = socketio.ASGIApp(sio)
 
 user_count=0
-online_users = {} # Dictionary to store online users
+
 unique_users = {}
 
 @sio.on("connect")
@@ -25,12 +25,12 @@ async def connect(sid,env):
     print("New Client Connected to This id :"+" "+str(sid))
     
 
-    online_users[sid] = {
-        'sid': sid,
-        'connected_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'user_name': f'{sid[:8]}',  # ชื่อชั่วคราว
-        'status': 'online'
-    }
+    # online_users[sid] = {
+    #     'sid': sid,
+    #     'connected_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    #     'user_name': f'{sid[:8]}',  # ชื่อชั่วคราว
+    #     'status': 'online'
+    # }
 
     print(f"จำนวนผู้ใช้ออนไลน์: {user_count} คน")
 
@@ -111,8 +111,6 @@ async def authenticate(sid, token_data):
         display_name = f"{given_name} {family_name}".strip() or username
         email = data.get('email', '')
         
-        print(f"User info: {username}")
-        
         # ตรวจสอบว่าเป็น user ใหม่หรือไม่
         # is_new_user = username not in unique_users
         is_new_user = True
@@ -120,6 +118,7 @@ async def authenticate(sid, token_data):
             if user.get('username') == username:
                 is_new_user = False
                 break
+        
         
         if is_new_user:
             unique_users[sid] = {
@@ -132,7 +131,8 @@ async def authenticate(sid, token_data):
             global user_count
             user_count += 1
             print(f"🆕 New unique user: {username}")
-
+        elif sid in unique_users:
+            print(f"🔄 User {username} reconnected with same SID")
         else:
             unique_users[sid] = {
                 'keycloak_id': keycloak_id,
@@ -165,7 +165,7 @@ async def authenticate(sid, token_data):
 
 @sio.on('msg')
 async def client_side_receive_msg(sid, msg):
-    user_info = online_users.get(sid, {})
+    # user_info = online_users.get(sid, {})
     user_name = user_info.get('user_name', f'ผู้ใช้_{sid[:8]}')
     timestamp = datetime.now().strftime('%H:%M:%S')
     
