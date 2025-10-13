@@ -91,3 +91,4 @@ wheel==0.45.1
 zipp==3.23.0
 PyJWT==2.10.1
 python-socketio==5.14.1
+cryptography==46.0.2
