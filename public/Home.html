@@ -34,6 +34,38 @@ socket.on('send_msg',(data)=>{
 } );
 </script>
 
+<!-- แสดงผู้ใช้ออนไลน์แบบ real-time -->
+<h2>🟢 ผู้ใช้ออนไลน์ (Real-time) <span id="userCount">0</span> คน</h2>
+<div id="onlineUsers"></div>
+<script>
+    socket.on('online_users_update', function(data) {
+    const onlineUsersDiv = document.getElementById('onlineUsers');
+    const userCountSpan = document.getElementById('userCount');
+    
+    // อัพเดตจำนวนคน
+    userCountSpan.textContent = data.total_count;
+    
+    // อัพเดตรายชื่อ
+    onlineUsersDiv.innerHTML = '';
+    
+    if (data.users.length === 0) {
+        onlineUsersDiv.innerHTML = '<div class="user-item">ไม่มีผู้ใช้ออนไลน์</div>';
+    } else {
+        data.users.forEach(function(user) {
+            const userElement = document.createElement('div');
+            userElement.className = 'user-item';
+            userElement.innerHTML = `
+                👤 ${user.user_name} 
+                <small>(ID: ${user.sid.substring(0,8)}... | เชื่อมต่อ: ${user.connected_at})</small>
+            `;
+            onlineUsersDiv.appendChild(userElement);
+        });
+    }
+    
+    console.log('อัพเดตรายชื่อผู้ใช้:', data);
+});
+</script>
+
 <input type="text" id="messageInput" placeholder="Type your message here..." />
 <button id="sendButton">Send</button>
 
@@ -43,16 +75,41 @@ document.getElementById('sendButton').onclick = function() {
     socket.emit('msg', message);
 };
 </script>
+
+
+
 <h1>Message Log</h1>
 <div id="messageLog"></div>
 <script>    
+socket.on('send_msg', function(data) {
+    const messageLog = document.getElementById('messageLog');
+    const messageElement = document.createElement('div');
+    messageElement.className = 'message-item';
+    
+    if (typeof data === 'object') {
+        
+        messageElement.innerHTML = `
+            <strong>${data.user_name}</strong> 
+            <small>[${data.timestamp}] (${data.user_id})</small><br>
+            ${data.message}
+        `;
+        
+        
+        if (data.user_id === 'system') {
+            messageElement.classList.add('system-message');
+        }
+    } else {
+        // รับ string ธรรมดา
+        messageElement.textContent = data;
+    }
+    
+    messageLog.appendChild(messageElement);
+    messageLog.scrollTop = messageLog.scrollHeight;
+    
+    console.log('ได้รับข้อความ:', data);
+});
 
-socket.on('send_msg',(data)=>{
-  const messageLog = document.getElementById('messageLog');
-  const messageElement = document.createElement('div');
-  messageElement.textContent = data;
-  messageLog.appendChild(messageElement);
-} );
+
 </script>
 
 
