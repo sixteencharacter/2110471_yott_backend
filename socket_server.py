@@ -14,6 +14,7 @@ import config
 from services import sessionmanager
 from sqlalchemy import select
 from models import Person, Chat, Message
+
 #Socket io (sio) create a Socket.IO server
 sio=socketio.AsyncServer(cors_allowed_origins=[],allow_upgrades=True,async_mode='asgi')
 #wrap with ASGI application
@@ -26,15 +27,6 @@ unique_users = {}
 @sio.on("connect")
 async def connect(sid,env):
     print("New Client Connected to This id :"+" "+str(sid))
-    
-
-    # online_users[sid] = {
-    #     'sid': sid,
-    #     'connected_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-    #     'user_name': f'{sid[:8]}',  # ชื่อชั่วคราว
-    #     'status': 'online'
-    # }
-
     print(f"จำนวนผู้ใช้ออนไลน์: {user_count} คน")
 
     # ส่งข้อความให้ส่ง token มา
@@ -48,9 +40,6 @@ async def disconnect(sid):
     flag = 0
     
     if sid in unique_users:
-        # user_info = online_users[sid]
-        # keycloak_id = user_info.get('keycloak_id')
-    
         # ลบ session
         name = unique_users[sid].get('username', f'ผู้ใช้_{sid[:8]}')
         del unique_users[sid]
@@ -168,6 +157,17 @@ async def broadcast_user_list():
         'total_count': user_count,
     }
     await sio.emit("online_users_update", user_list)
+
+@sio.on('get_user_chat')
+async def get_user_chat(sid):
+    try:
+        async with sessionmanager.session() as db:
+            user_chats = await db.execute(select(Person.Chats).join(Chat).where(Person.uid == sid))
+            print(user_chats)
+        await sio.emit("chat_history", user_chats, room=sid)
+    except Exception as e:
+        print(f"Error fetching user chats for {sid}: {e}")
+        await sio.emit("chat_history", {"error": "Could not fetch chats"}, room=sid)
 
 @sio.on('msg')
 async def client_side_receive_msg(sid, msg):
