@@ -13,7 +13,7 @@ class Person(Base):
     family_name = Column(Text())
     preferred_username = Column(Text())
 
-    users: Mapped[List[Chat]] = relationship(secondary=user_belong_to_chat)
+    Chats: Mapped[List[Chat]] = relationship(secondary=user_belong_to_chat)
 
     def __repr__(self):
         return f"id: {self.uid}, name: {self.given_name}"
