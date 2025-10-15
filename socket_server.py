@@ -160,25 +160,6 @@ async def authenticate(sid, token_data):
         return
 
     await broadcast_user_list()
-
-# @sio.on('disconnect_request')
-# async def disconnect_request(sid):
-#     await sio.disconnect(sid)   
-
-
-# @sio.on('msg')
-# async def client_side_receive_msg(sid, msg):
-#     # user_info = online_users.get(sid, {})
-#     user_name = user_info.get('user_name', f'ผู้ใช้_{sid[:8]}')
-#     timestamp = datetime.now().strftime('%H:%M:%S')
-    
-#     print("Msg receive from " +str(sid) +"and msg is : ",str(msg))
-#     await sio.emit("send_msg", {
-#         'user_name': user_name,
-#         'message': str(msg),
-#         'timestamp': timestamp,
-#         'user_id': sid[:8]
-#     })
     
 async def broadcast_user_list():
     """ส่งรายชื่อผู้ใช้ออนไลน์ให้ทุกคนแบบ real-time"""
@@ -210,16 +191,16 @@ async def direct_msg(sid, data):
     print(f"Private message from {sender_id} -> {chat_id}: {message}")
 
     # Find receiver if online user finish we will implement
-    # if receiver_id in online_users:
-    #     receiver_sid = online_users[receiver_id]
-    #     sio.emit("private_message", {
-    #         "sender_id": sender_id,
-    #         "message": message,
-    #         "timestamp": eventlet.green.time.time()
-    #     }, to=receiver_sid)
-    # else:
-    #     print(f"User {receiver_id} is offline")
-    #     # Optionally save message in DB for later delivery
+    if receiver_id in online_users:
+        receiver_sid = online_users[receiver_id]
+        sio.emit("private_message", {
+            "sender_id": sender_id,
+            "message": message,
+            "timestamp": eventlet.green.time.time()
+        }, to=receiver_sid)
+    else:
+        print(f"User {receiver_id} is offline")
+        # Optionally save message in DB for later delivery
     # Create a proper Message model instance
     new_message = Message(
         sender_id=sender_id,
