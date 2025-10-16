@@ -163,35 +163,45 @@ async def authenticate(sid, token_data):
     
 async def broadcast_user_list():
     """ส่งรายชื่อผู้ใช้ออนไลน์ให้ทุกคนแบบ real-time"""
-    user_list = {
-        'users': list(unique_users.values()),
-        'total_count': user_count,
-    }
-
-
+ 
     async with sessionmanager.session() as db:
             result = await db.execute(
-                select(Person)
+                select(Person.uid, Person.preferred_username, Person.given_name, Person.family_name, Person.email)
             )
-            
-            user_db = result.fetchall()
-            print(f"Fetched {len(user_db)} users from DB")
-            # print("Unique users currently online:", user_db)
+            user_db_rows = result.fetchall()
+            print(f"Fetched {len(user_db_rows)} users from DB")
+        
+        
+    db_users = {}
+    for row in user_db_rows:
+        uid, username, given_name, family_name, email = row
+        display_name = f"{given_name or ''} {family_name or ''}".strip() or username
+        db_users[uid] = {
+            'uid': uid,
+            'username': username,
+            'given_name': given_name,
+            'family_name': family_name,
+            'display_name': display_name,
+            'email': email,
+            'status': 'offline'  
+        }
 
-    user_db = [u[0] for u in user_db]
-    print(user_db)
-    # usser_db : [uid] uid == keycloak_id
-    # unique_user {sid : {...}}
-    ret = []
-    for db_user in user_db:
-        temp = db_user
-        unique_users[db_user]['status'] = 'online'
-    
-    for i in unique_users:
-        print(f"Userunique {i}: ")
-    
+    print(f"Current unique users: {list(unique_users.keys())}")
+    for db1 in db_users:
+        for sid in unique_users:
+            if(unique_users[sid]["keycloak_id"] == db1):
+                db_users[db1]['status'] = 'online'
+                break
+        
 
-    print(list(unique_users.values()))
+    print(f"Transformed DB users: {list(db_users.values())}")
+    user_list = {
+        'users': list(db_users.values()),
+        'total_count': user_count,
+    }
+    await sio.emit("online_users_update", user_list)
+    
+    
 
 
 
