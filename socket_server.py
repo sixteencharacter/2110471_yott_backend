@@ -102,6 +102,7 @@ async def authenticate(sid, token_data):
         family_name = data.get('family_name', '')
         display_name = f"{given_name} {family_name}".strip() or username
         email = data.get('email', '')
+        status = "offline"
         
         # ตรวจสอบว่าเป็น user ใหม่หรือไม่
         # is_new_user = username not in unique_users
@@ -114,10 +115,12 @@ async def authenticate(sid, token_data):
         
         if is_new_user:
             unique_users[sid] = {
+                'sid': sid,
                 'keycloak_id': keycloak_id,
                 'username': username,
                 'display_name': display_name,
-                'email': email
+                'email': email,
+                'status': status
             }
 
             global user_count
@@ -127,12 +130,16 @@ async def authenticate(sid, token_data):
             print(f"🔄 User {username} reconnected with same SID")
         else:
             unique_users[sid] = {
+                'sid': sid,
                 'keycloak_id': keycloak_id,
                 'username': username,
                 'display_name': display_name,
-                'email': email
+                'email': email,
+                'status': status
             }
             print(f"🔄 Existing user reconnected: {username}")
+
+        
         
 
     except jwt.ExpiredSignatureError:
@@ -148,15 +155,56 @@ async def authenticate(sid, token_data):
         await sio.emit("auth_error", {"message": f"Error: {str(e)}"})
         return
 
+
+
+    
+
     await broadcast_user_list()
     
 async def broadcast_user_list():
     """ส่งรายชื่อผู้ใช้ออนไลน์ให้ทุกคนแบบ real-time"""
+ 
+    async with sessionmanager.session() as db:
+            result = await db.execute(
+                select(Person.uid, Person.preferred_username, Person.given_name, Person.family_name, Person.email)
+            )
+            user_db_rows = result.fetchall()
+            print(f"Fetched {len(user_db_rows)} users from DB")
+        
+        
+    db_users = {}
+    for row in user_db_rows:
+        uid, username, given_name, family_name, email = row
+        display_name = f"{given_name or ''} {family_name or ''}".strip() or username
+        db_users[uid] = {
+            'uid': uid,
+            'username': username,
+            'given_name': given_name,
+            'family_name': family_name,
+            'display_name': display_name,
+            'email': email,
+            'status': 'offline'  
+        }
+
+    print(f"Current unique users: {list(unique_users.keys())}")
+    for db1 in db_users:
+        for sid in unique_users:
+            if(unique_users[sid]["keycloak_id"] == db1):
+                db_users[db1]['status'] = 'online'
+                break
+        
+
+    print(f"Transformed DB users: {list(db_users.values())}")
     user_list = {
-        'users': list(unique_users.values()),
+        'users': list(db_users.values()),
         'total_count': user_count,
     }
     await sio.emit("online_users_update", user_list)
+    
+    
+
+
+
 
 @sio.on('create_chat')
 async def create_chat(sid, chat_data):
