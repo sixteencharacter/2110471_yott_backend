@@ -1,3 +1,4 @@
+from icecream import datetime
 import uvicorn
 import socketio
 from datetime import datetime
@@ -10,6 +11,9 @@ import os
 sys.path.append(os.getcwd())
 from jwt import PyJWKClient
 import config
+from services import sessionmanager
+from sqlalchemy import select
+from models import Person, Chat, Message
 
 #Socket io (sio) create a Socket.IO server
 sio=socketio.AsyncServer(cors_allowed_origins=[],allow_upgrades=True,async_mode='asgi')
@@ -23,15 +27,6 @@ unique_users = {}
 @sio.on("connect")
 async def connect(sid,env):
     print("New Client Connected to This id :"+" "+str(sid))
-    
-
-    # online_users[sid] = {
-    #     'sid': sid,
-    #     'connected_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-    #     'user_name': f'{sid[:8]}',  # ชื่อชั่วคราว
-    #     'status': 'online'
-    # }
-
     print(f"จำนวนผู้ใช้ออนไลน์: {user_count} คน")
 
     # ส่งข้อความให้ส่ง token มา
@@ -45,9 +40,6 @@ async def disconnect(sid):
     flag = 0
     
     if sid in unique_users:
-        # user_info = online_users[sid]
-        # keycloak_id = user_info.get('keycloak_id')
-    
         # ลบ session
         name = unique_users[sid].get('username', f'ผู้ใช้_{sid[:8]}')
         del unique_users[sid]
@@ -157,25 +149,6 @@ async def authenticate(sid, token_data):
         return
 
     await broadcast_user_list()
-
-# @sio.on('disconnect_request')
-# async def disconnect_request(sid):
-#     await sio.disconnect(sid)   
-
-
-# @sio.on('msg')
-# async def client_side_receive_msg(sid, msg):
-#     # user_info = online_users.get(sid, {})
-#     user_name = user_info.get('user_name', f'ผู้ใช้_{sid[:8]}')
-#     timestamp = datetime.now().strftime('%H:%M:%S')
-    
-#     print("Msg receive from " +str(sid) +"and msg is : ",str(msg))
-#     await sio.emit("send_msg", {
-#         'user_name': user_name,
-#         'message': str(msg),
-#         'timestamp': timestamp,
-#         'user_id': sid[:8]
-#     })
     
 async def broadcast_user_list():
     """ส่งรายชื่อผู้ใช้ออนไลน์ให้ทุกคนแบบ real-time"""
@@ -185,6 +158,74 @@ async def broadcast_user_list():
     }
     await sio.emit("online_users_update", user_list)
 
+@sio.on('get_user_chat')
+async def get_user_chat(sid):
+    try:
+        async with sessionmanager.session() as db:
+            user_chats = await db.execute(select(Person.Chats).join(Chat).where(Person.uid == sid))
+            print(user_chats)
+        await sio.emit("chat_history", user_chats, room=sid)
+    except Exception as e:
+        print(f"Error fetching user chats for {sid}: {e}")
+        await sio.emit("chat_history", {"error": "Could not fetch chats"}, room=sid)
+
+@sio.on('msg')
+async def client_side_receive_msg(sid, msg):
+    print("Msg receive from " +str(sid) +"and msg is : ",str(msg))
+    await sio.emit("send_msg", str(msg))
+    
+@sio.on("Direct_Msg")
+async def direct_msg(sid, data):
+    """
+        Expected data format:
+        {
+            "sender_id": "user123",
+            "chat_id": "chat01",
+            "message": "Hello!"
+        }
+    """
+    sender_id = data["sender_id"]
+    chat_id = data["chat_id"]
+    message = data["message"]
+    timestamp = datetime.now().strftime('%H:%M:%S')
+    print(f"Private message from {sender_id} -> {chat_id}: {message}")
+
+    # Find receiver if online user finish we will implement
+    # if receiver_id in online_users:
+    #     receiver_sid = online_users[receiver_id]
+    #     sio.emit("private_message", {
+    #         "sender_id": sender_id,
+    #         "message": message,
+    #         "timestamp": eventlet.green.time.time()
+    #     }, to=receiver_sid)
+    # else:
+    #     print(f"User {receiver_id} is offline")
+        # Optionally save message in DB for later delivery
+    # Create a proper Message model instance
+    new_message = Message(
+        sender_id=sender_id,
+        chat_id=chat_id,
+        content=message
+    )
+    
+    async with sessionmanager.session() as db:
+        db.add(new_message)
+        await db.commit()
+        
+        # Get receiver ID 
+        result = await db.execute(select(Person.uid).where(Person.id == chat_id).where(Person.id != sender_id))
+        receiver_id = result.scalar_one_or_none()
+
+    if not receiver_id:
+        # Handle case where receiver is not found
+        print(f"Receiver not found for chat_id: {chat_id}")
+        return
+
+    await sio.emit("Direct_Msg", {
+            "sender_id": sender_id,
+            "message": message,
+            "timestamp": timestamp
+        }, to=receiver_id)
 
 if __name__=="__main__":
     uvicorn.run("Soket_io:app", host="0.0.0.0", port=7777, lifespan="on", reload=True)

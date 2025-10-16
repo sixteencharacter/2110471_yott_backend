@@ -1,10 +1,11 @@
-from sqlalchemy import Column, DateTime, String, Integer, func , UUID , Text
+from sqlalchemy import Column, UUID, Integer , Text
 from .models import Base
+from sqlalchemy.orm import relationship
 
 class Person(Base):
     __tablename__ = "yott_person"
 
-    uid = Column(UUID, primary_key=True)
+    uid = Column(Integer, primary_key=True)
     email = Column(Text())
     given_name = Column(Text())
     family_name = Column(Text())
