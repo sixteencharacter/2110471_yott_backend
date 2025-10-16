@@ -14,3 +14,9 @@ async def get_all_available_chatroom(userData : Annotated[dict,Depends(validate_
     return JSONResponse({
         "sticker_set_owned" : []
     })
+
+@router.get("/chats")
+async def get_all_available_chatroom(userData : Annotated[dict,Depends(validate_access_token)]):
+    return JSONResponse({
+        "chat_rooms" : []
+    })
