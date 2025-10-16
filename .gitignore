@@ -210,3 +210,5 @@ __marimo__/
 keycloak
 
 .DS_STORE
+
+test*
