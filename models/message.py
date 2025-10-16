@@ -8,7 +8,7 @@ class Message(Base):
 
     mid = Column(Integer, primary_key=True, default=uuid.uuid4)
     data = Column(Text())
-    s_id = Column(Integer, ForeignKey("yott_person.uid")) #sender id
+    s_id = Column(Text, ForeignKey("yott_person.uid")) #sender id
     cid = Column(Integer, ForeignKey("yott_chat.cid")) #chat id
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     

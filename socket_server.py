@@ -158,7 +158,7 @@ async def broadcast_user_list():
     }
     await sio.emit("online_users_update", user_list)
 
-@sio.on('get_user_chat')
+@sio.on('get_user_chat') #ทำใน http 
 async def get_user_chat(sid):
     try:
         async with sessionmanager.session() as db:
@@ -179,8 +179,6 @@ async def direct_msg(sid, data):
     """
         Expected data format:
         {
-            "sender_id": "user123",
-            "chat_id": "chat01",
             "message": "Hello!"
         }
     """
