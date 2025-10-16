@@ -13,7 +13,7 @@ from jwt import PyJWKClient
 import config
 from services import sessionmanager
 from sqlalchemy import select
-from models import Person, Chat, Message
+from models import Person, Chat, Message, user_belong_to_chat
 
 #Socket io (sio) create a Socket.IO server
 sio=socketio.AsyncServer(cors_allowed_origins=[],allow_upgrades=True,async_mode='asgi')
@@ -158,16 +158,57 @@ async def broadcast_user_list():
     }
     await sio.emit("online_users_update", user_list)
 
-@sio.on('get_user_chat') #ทำใน http 
-async def get_user_chat(sid):
+@sio.on('create_chat')
+async def create_chat(sid, chat_data):
+    """
+    chat_data ควรมีโครงสร้างดังนี้:
+    {
+        "chat_name": "ชื่อแชท",
+        "is_groupchat": True/False,
+        "member_ids": ["user_id1", "user_id2", ...]  # รายชื่อ user IDs ที่จะเข้าร่วมแชท
+    }
+    """
+    print(f"📨 Received create_chat from {sid}: {str(chat_data)[:50]}...")
+    
+    chat_name = chat_data.get("chat_name", "Unnamed Chat")
+    is_groupchat = chat_data.get("is_groupchat", False)
+    member_ids = chat_data.get("member_ids", [])
+    
+    if sid not in unique_users:
+        await sio.emit("chat_creation_error", {"message": "User not authenticated"}, room=sid)
+        return
+    
+    creator = unique_users[sid]
+    creator_id = creator['keycloak_id']
+    
+    if creator_id not in member_ids:
+        member_ids.append(creator_id)  # ให้แน่ใจว่า creator อยู่ในแชทด้วย
+    
     try:
         async with sessionmanager.session() as db:
-            user_chats = await db.execute(select(Person.Chats).join(Chat).where(Person.uid == sid))
-            print(user_chats)
-        await sio.emit("chat_history", user_chats, room=sid)
+            # สร้างแชทใหม่
+            new_chat = Chat(name=chat_name, is_groupchat=is_groupchat)
+            db.add(new_chat)
+            await db.flush()  # เพื่อให้ได้ chat ID
+            
+            # เพิ่มสมาชิกในแชท
+            for member_id in member_ids:
+                user_b2c = user_belong_to_chat(uid=member_id, cid=new_chat.cid)
+                db.add(user_b2c)
+            
+            await db.commit()
+        
+        print(f"✅ Chat '{chat_name}' created with ID {new_chat.cid}")
+        await sio.emit("chat_created", {
+            "cid": new_chat.cid,
+            "name": new_chat.name,
+            "is_groupchat": new_chat.is_groupchat,
+            "member_ids": member_ids
+        }, room=sid)
+        
     except Exception as e:
-        print(f"Error fetching user chats for {sid}: {e}")
-        await sio.emit("chat_history", {"error": "Could not fetch chats"}, room=sid)
+        print(f"❌ Error creating chat: {e}")
+        await sio.emit("chat_creation_error", {"message": f"Error: {str(e)}"}, room=sid)
 
 @sio.on('msg')
 async def client_side_receive_msg(sid, msg):
