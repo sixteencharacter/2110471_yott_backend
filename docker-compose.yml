@@ -39,6 +39,15 @@ services:
         - 5555:80
     depends_on:
         - db
+        
+  iboon_fastapi:
+    build:
+      context: . # Path to the directory containing the Dockerfile
+      dockerfile: Dockerfile # Optional: specify if not named 'Dockerfile' or in a different location
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
 
 volumes:
     pgdata:
