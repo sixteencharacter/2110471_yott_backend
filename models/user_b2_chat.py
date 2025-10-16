@@ -1,4 +1,4 @@
-from sqlalchemy import Column, UUID, ForeignKey, Integer
+from sqlalchemy import Column, UUID, ForeignKey, Integer, Text
 from .models import Base
 
 
@@ -6,7 +6,7 @@ class user_belong_to_chat(Base):
     __tablename__ = "yott_user_belong_to_chat"
 
     rid = Column(Integer, primary_key=True)
-    uid = Column(Integer, ForeignKey("yott_person.uid"))
+    uid = Column(Text, ForeignKey("yott_person.uid"))
     cid = Column(Integer, ForeignKey("yott_chat.cid"))
 
     def __repr__(self):
