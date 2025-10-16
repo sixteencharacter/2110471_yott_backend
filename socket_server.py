@@ -102,6 +102,7 @@ async def authenticate(sid, token_data):
         family_name = data.get('family_name', '')
         display_name = f"{given_name} {family_name}".strip() or username
         email = data.get('email', '')
+        status = "offline"
         
         # ตรวจสอบว่าเป็น user ใหม่หรือไม่
         # is_new_user = username not in unique_users
@@ -114,10 +115,12 @@ async def authenticate(sid, token_data):
         
         if is_new_user:
             unique_users[sid] = {
+                'sid': sid,
                 'keycloak_id': keycloak_id,
                 'username': username,
                 'display_name': display_name,
-                'email': email
+                'email': email,
+                'status': status
             }
 
             global user_count
@@ -127,12 +130,16 @@ async def authenticate(sid, token_data):
             print(f"🔄 User {username} reconnected with same SID")
         else:
             unique_users[sid] = {
+                'sid': sid,
                 'keycloak_id': keycloak_id,
                 'username': username,
                 'display_name': display_name,
-                'email': email
+                'email': email,
+                'status': status
             }
             print(f"🔄 Existing user reconnected: {username}")
+
+        
         
 
     except jwt.ExpiredSignatureError:
@@ -148,6 +155,10 @@ async def authenticate(sid, token_data):
         await sio.emit("auth_error", {"message": f"Error: {str(e)}"})
         return
 
+
+
+    
+
     await broadcast_user_list()
     
 async def broadcast_user_list():
@@ -156,7 +167,34 @@ async def broadcast_user_list():
         'users': list(unique_users.values()),
         'total_count': user_count,
     }
-    await sio.emit("online_users_update", user_list)
+
+
+    async with sessionmanager.session() as db:
+            result = await db.execute(
+                select(Person)
+            )
+            
+            user_db = result.fetchall()
+            print(f"Fetched {len(user_db)} users from DB")
+            # print("Unique users currently online:", user_db)
+
+    user_db = [u[0] for u in user_db]
+    print(user_db)
+    # usser_db : [uid] uid == keycloak_id
+    # unique_user {sid : {...}}
+    ret = []
+    for db_user in user_db:
+        temp = db_user
+        unique_users[db_user]['status'] = 'online'
+    
+    for i in unique_users:
+        print(f"Userunique {i}: ")
+    
+
+    print(list(unique_users.values()))
+
+
+
 
 @sio.on('get_user_chat') #ทำใน http 
 async def get_user_chat(sid):
