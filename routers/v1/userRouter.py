@@ -21,9 +21,7 @@ async def get_all_available_chatroom(userData : Annotated[dict,Depends(validate_
 
 @router.get("/chats")
 async def get_user_chats(userData : Annotated[dict,Depends(validate_access_token)], db : AsyncSession = Depends(get_db)):
-    print("User Data:", userData)
     user_id = userData.get("sub")  # Use 'sub' which is the standard JWT claim for user ID
-    print("User ID:", user_id)
     # Join Chat and user_belong_to_chat tables to get user's chats
     result = await db.execute(
         select(Chat)
@@ -32,7 +30,7 @@ async def get_user_chats(userData : Annotated[dict,Depends(validate_access_token
     )
     
     chats = result.scalars().all()
-    print("Chats:", chats)
+    # print("Chats:", chats)
     
     # Convert to serializable format
     chat_list = []
