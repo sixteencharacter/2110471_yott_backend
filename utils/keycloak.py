@@ -18,6 +18,7 @@ async def validate_access_token(
 ):
     url = config.KC_CERT_URL
     optional_custom_headers = {"User-agent": "yott-backend-agent"}
+    print(url)
     jwks_client = PyJWKClient(url, headers=optional_custom_headers)
 
     try:
