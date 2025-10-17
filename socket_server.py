@@ -13,7 +13,7 @@ from jwt import PyJWKClient
 import config
 from services import sessionmanager
 from sqlalchemy import select
-from models import Person, Chat, Message
+from models import Person, Chat, Message, user_belong_to_chat
 
 #Socket io (sio) create a Socket.IO server
 sio=socketio.AsyncServer(cors_allowed_origins=[],allow_upgrades=True,async_mode='asgi')
@@ -102,6 +102,7 @@ async def authenticate(sid, token_data):
         family_name = data.get('family_name', '')
         display_name = f"{given_name} {family_name}".strip() or username
         email = data.get('email', '')
+        status = "offline"
         
         # ตรวจสอบว่าเป็น user ใหม่หรือไม่
         # is_new_user = username not in unique_users
@@ -114,10 +115,12 @@ async def authenticate(sid, token_data):
         
         if is_new_user:
             unique_users[sid] = {
+                'sid': sid,
                 'keycloak_id': keycloak_id,
                 'username': username,
                 'display_name': display_name,
-                'email': email
+                'email': email,
+                'status': status
             }
 
             global user_count
@@ -127,12 +130,16 @@ async def authenticate(sid, token_data):
             print(f"🔄 User {username} reconnected with same SID")
         else:
             unique_users[sid] = {
+                'sid': sid,
                 'keycloak_id': keycloak_id,
                 'username': username,
                 'display_name': display_name,
-                'email': email
+                'email': email,
+                'status': status
             }
             print(f"🔄 Existing user reconnected: {username}")
+
+        
         
 
     except jwt.ExpiredSignatureError:
@@ -148,26 +155,108 @@ async def authenticate(sid, token_data):
         await sio.emit("auth_error", {"message": f"Error: {str(e)}"})
         return
 
+
+
+    
+
     await broadcast_user_list()
     
 async def broadcast_user_list():
     """ส่งรายชื่อผู้ใช้ออนไลน์ให้ทุกคนแบบ real-time"""
+ 
+    async with sessionmanager.session() as db:
+            result = await db.execute(
+                select(Person.uid, Person.preferred_username, Person.given_name, Person.family_name, Person.email)
+            )
+            user_db_rows = result.fetchall()
+            print(f"Fetched {len(user_db_rows)} users from DB")
+        
+        
+    db_users = {}
+    for row in user_db_rows:
+        uid, username, given_name, family_name, email = row
+        display_name = f"{given_name or ''} {family_name or ''}".strip() or username
+        db_users[uid] = {
+            'uid': uid,
+            'username': username,
+            'given_name': given_name,
+            'family_name': family_name,
+            'display_name': display_name,
+            'email': email,
+            'status': 'offline'  
+        }
+
+    print(f"Current unique users: {list(unique_users.keys())}")
+    for db1 in db_users:
+        for sid in unique_users:
+            if(unique_users[sid]["keycloak_id"] == db1):
+                db_users[db1]['status'] = 'online'
+                break
+        
+
+    print(f"Transformed DB users: {list(db_users.values())}")
     user_list = {
-        'users': list(unique_users.values()),
+        'users': list(db_users.values()),
         'total_count': user_count,
     }
     await sio.emit("online_users_update", user_list)
+    
+    
 
-@sio.on('get_user_chat') #ทำใน http 
-async def get_user_chat(sid):
+
+
+
+@sio.on('create_chat')
+async def create_chat(sid, chat_data):
+    """
+    chat_data ควรมีโครงสร้างดังนี้:
+    {
+        "chat_name": "ชื่อแชท",
+        "is_groupchat": True/False,
+        "member_ids": ["user_id1", "user_id2", ...]  # รายชื่อ user IDs ที่จะเข้าร่วมแชท
+    }
+    """
+    print(f"📨 Received create_chat from {sid}: {str(chat_data)[:50]}...")
+    
+    chat_name = chat_data.get("chat_name", "Unnamed Chat")
+    is_groupchat = chat_data.get("is_groupchat", False)
+    member_ids = chat_data.get("member_ids", [])
+    
+    if sid not in unique_users:
+        await sio.emit("chat_creation_error", {"message": "User not authenticated"}, room=sid)
+        return
+    
+    creator = unique_users[sid]
+    creator_id = creator['keycloak_id']
+    
+    if creator_id not in member_ids:
+        member_ids.append(creator_id)  # ให้แน่ใจว่า creator อยู่ในแชทด้วย
+    
     try:
         async with sessionmanager.session() as db:
-            user_chats = await db.execute(select(Person.Chats).join(Chat).where(Person.uid == sid))
-            print(user_chats)
-        await sio.emit("chat_history", user_chats, room=sid)
+            # สร้างแชทใหม่
+            new_chat = Chat(name=chat_name, is_groupchat=is_groupchat)
+            db.add(new_chat)
+            await db.flush()  # เพื่อให้ได้ chat ID
+            
+            # เพิ่มสมาชิกในแชท
+            for member_id in member_ids:
+                user_b2c = user_belong_to_chat(uid=member_id, cid=new_chat.cid)
+                db.add(user_b2c)
+            
+            await db.commit()
+        
+        print(f"✅ Chat '{chat_name}' created with ID {new_chat.cid}")
+        await sio.emit("chat_created", {
+            "cid": new_chat.cid,
+            "name": new_chat.name,
+            "is_groupchat": new_chat.is_groupchat,
+            "member_ids": member_ids
+        }, room=sid)
+        
     except Exception as e:
-        print(f"Error fetching user chats for {sid}: {e}")
-        await sio.emit("chat_history", {"error": "Could not fetch chats"}, room=sid)
+        print(f"❌ Error creating chat: {e}")
+        await sio.emit("chat_creation_error", {"message": f"Error: {str(e)}"}, room=sid)
 
 @sio.on('msg')
 async def client_side_receive_msg(sid, msg):
