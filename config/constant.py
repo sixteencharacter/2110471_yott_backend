@@ -6,10 +6,11 @@ from dotenv import load_dotenv
 load_dotenv(".env")
 
 RELOAD_DIRS = [
-    "./routers",
-    "./services",
-    "./utils",
-    "./config"
+    # "./routers",
+    # "./services",
+    # "./utils",
+    # "./config",
+    "."
 ]
 
 KC_CERT_URL=os.environ.get("KC_CERT_URL")

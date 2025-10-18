@@ -1,182 +1,87 @@
-from icecream import datetime
-import uvicorn
+from utils import validate_accessToken_without_raise
 import socketio
-from datetime import datetime
-import requests
-import jwt
-import sys
-import os
-
-# เพิ่ม path เพื่อใช้ config
-sys.path.append(os.getcwd())
-from jwt import PyJWKClient
-import config
 from services import sessionmanager
 from sqlalchemy import select
-from models import Person, Chat, Message, user_belong_to_chat
+from models import Person , Chat , user_belong_to_chat , Message
+from typing import Dict 
+from datetime import datetime
 
-#Socket io (sio) create a Socket.IO server
-sio=socketio.AsyncServer(cors_allowed_origins=[],allow_upgrades=True,async_mode='asgi')
-#wrap with ASGI application
+# Socket IO server instance 
+sio = socketio.AsyncServer(cors_allowed_origins=[],allow_upgrades=True,async_mode='asgi')
+
+# ASGI application ready to be mounted with the FastAPI
 socket_app = socketio.ASGIApp(sio)
 
-user_count=0
+class SocketIOManager :
 
-unique_users = {}
+    def __init__(self) :
+        self.user_counter : int = 0
+        self.user_mapper : Dict[str,Dict[str,any]] = dict()
+
+    def add_client(self,cid : str , decoded_data : dict) :
+        self.user_mapper[cid] = decoded_data
+        self.user_counter += 1
+
+    def get_all_available_clients(self) :
+        return set([u["sub"] for u in self.user_mapper.values()])
+
+    def remove_client(self,cid) :
+        del self.user_mapper[cid]
+        self.user_counter -= 1
+
+    def get_user_count(self) :
+        return self.user_counter
+    
+    def isOnline(self,sid : str) :
+        return sid in self.user_mapper
+    
+    def getUserWithSID(self,sid : str) :
+        if sid in self.user_mapper :
+            return self.user_mapper[sid]
+        else :
+            return None
+
+client_manager = SocketIOManager()
 
 @sio.on("connect")
 async def connect(sid,env):
-    print("New Client Connected to This id :"+" "+str(sid))
-    print(f"จำนวนผู้ใช้ออนไลน์: {user_count} คน")
-
-    # ส่งข้อความให้ส่ง token มา
-    await sio.emit("sent_token", {"message": "Please send your token"}, room=sid)
-    print("Sent sent_token to " + str(sid))
+    # authentication
+    try :
+        # extract auth token from the asgi scope
+        authToken = [e for e in env['asgi.scope']['headers'] if e[0] == b"authorization"][0][1].decode("utf-8").replace("Bearer","").strip()
+    except :
+        authToken = "Failed Token"
+    userData , err = await validate_accessToken_without_raise(authToken)
+    if err is not None :
+        await sio.disconnect(sid)
+    else :
+        client_manager.add_client(sid,userData)
     await broadcast_user_list()
 
+    
 @sio.on("disconnect")
 async def disconnect(sid):
-    print("Client Disconnected: " + " " + str(sid))
-    flag = 0
-    
-    if sid in unique_users:
-        # ลบ session
-        name = unique_users[sid].get('username', f'ผู้ใช้_{sid[:8]}')
-        del unique_users[sid]
-        
-        print(f"User {sid} disconnected and removed from unique users")
-    for user in unique_users.values():
-        if user.get('username') == name:
-            flag = 1
-            break
 
-    if flag == 0:
-        global user_count
-        user_count -= 1
+    if client_manager.isOnline(sid) :
+        client_manager.remove_client(sid)
 
     await broadcast_user_list()
 
-@sio.on('authenticate')  # event ใหม่สำหรับรับ token
-async def authenticate(sid, token_data):
-    """รับ token จาก client และอัพเดตข้อมูล user"""
-    print(f"📨 Received authenticate from {sid}: {str(token_data)[:50]}...")
-    # รับ token
-    access_token = None
-    if isinstance(token_data, dict):
-        access_token = token_data.get('token')
-    elif isinstance(token_data, str):
-        access_token = token_data
-    
-    if not access_token:
-        await sio.emit("auth_error", {"message": "No token provided"}, room=sid)
-        return
 
-    print(f"Processing token: {access_token[:50]}...")
-    
-    try:
-        # ตรวจสอบ token format ก่อน
-        if not access_token or len(access_token.split('.')) != 3:
-            print("❌ Invalid token format")
-            await sio.emit("auth_error", {"message": "Invalid token format"}, room=sid)
-            return
-        
-        url = config.KC_CERT_URL
-        optional_custom_headers = {"User-agent": "yott-backend-agent"}
-        jwks_client = PyJWKClient(url, headers=optional_custom_headers)
-            
-        signing_key = jwks_client.get_signing_key_from_jwt(access_token)
-        data = jwt.decode(
-                access_token,
-                signing_key.key,
-                algorithms=["RS256"],
-                audience=config.KC_CLIENT_AUD,
-                options={"verify_exp": True},
-            )
-            
-        print(f"✅ Token decoded successfully for: {data.get('preferred_username')}")
-        
-        # ดึงข้อมูลจาก token
-        keycloak_id = data.get('sub')
-        username = data.get('preferred_username', 'unknown')
-        given_name = data.get('given_name', '')
-        family_name = data.get('family_name', '')
-        display_name = f"{given_name} {family_name}".strip() or username
-        email = data.get('email', '')
-        status = "offline"
-        
-        # ตรวจสอบว่าเป็น user ใหม่หรือไม่
-        # is_new_user = username not in unique_users
-        is_new_user = True
-        for user in unique_users.values():
-            if user.get('username') == username:
-                is_new_user = False
-                break
-        
-        
-        if is_new_user:
-            unique_users[sid] = {
-                'sid': sid,
-                'keycloak_id': keycloak_id,
-                'username': username,
-                'display_name': display_name,
-                'email': email,
-                'status': status
-            }
-
-            global user_count
-            user_count += 1
-            print(f"🆕 New unique user: {username}")
-        elif sid in unique_users:
-            print(f"🔄 User {username} reconnected with same SID")
-        else:
-            unique_users[sid] = {
-                'sid': sid,
-                'keycloak_id': keycloak_id,
-                'username': username,
-                'display_name': display_name,
-                'email': email,
-                'status': status
-            }
-            print(f"🔄 Existing user reconnected: {username}")
-
-        
-        
-
-    except jwt.ExpiredSignatureError:
-        print("❌ Token has expired")
-        await sio.emit("auth_error", {"message": "Token has expired"})
-        return
-    except jwt.InvalidTokenError as e:
-        print(f"❌ Invalid token: {e}")
-        await sio.emit("auth_error", {"message": f"Invalid token: {str(e)}"})
-        return
-    except Exception as e:
-        print(f"❌ Error decoding token: {e}")
-        await sio.emit("auth_error", {"message": f"Error: {str(e)}"})
-        return
-
-
-
-    
-
-    await broadcast_user_list()
-    
 async def broadcast_user_list():
-    """ส่งรายชื่อผู้ใช้ออนไลน์ให้ทุกคนแบบ real-time"""
  
     async with sessionmanager.session() as db:
-            result = await db.execute(
-                select(Person.uid, Person.preferred_username, Person.given_name, Person.family_name, Person.email)
-            )
-            user_db_rows = result.fetchall()
-            print(f"Fetched {len(user_db_rows)} users from DB")
+        result = await db.execute(
+            select(Person.uid, Person.preferred_username, Person.given_name, Person.family_name, Person.email)
+        )
+        user_db_rows = result.fetchall()
         
-        
-    db_users = {}
+    all_users = dict()
+
     for row in user_db_rows:
         uid, username, given_name, family_name, email = row
         display_name = f"{given_name or ''} {family_name or ''}".strip() or username
-        db_users[uid] = {
+        all_users[uid] = {
             'uid': uid,
             'username': username,
             'given_name': given_name,
@@ -186,26 +91,21 @@ async def broadcast_user_list():
             'status': 'offline'  
         }
 
-    print(f"Current unique users: {list(unique_users.keys())}")
-    for db1 in db_users:
-        for sid in unique_users:
-            if(unique_users[sid]["keycloak_id"] == db1):
-                db_users[db1]['status'] = 'online'
-                break
+    online_clients = client_manager.get_all_available_clients()
+    
+    for user in all_users:
+        if(user in online_clients):
+            all_users[user]['status'] = 'online'
         
 
-    print(f"Transformed DB users: {list(db_users.values())}")
     user_list = {
-        'users': list(db_users.values()),
-        'total_count': user_count,
+        'users': list(all_users.values()),
+        'total_count': client_manager.get_user_count(),
     }
+
     await sio.emit("online_users_update", user_list)
     
     
-
-
-
-
 @sio.on('create_chat')
 async def create_chat(sid, chat_data):
     """
@@ -216,18 +116,16 @@ async def create_chat(sid, chat_data):
         "member_ids": ["user_id1", "user_id2", ...]  # รายชื่อ user IDs ที่จะเข้าร่วมแชท
     }
     """
-    print(f"📨 Received create_chat from {sid}: {str(chat_data)[:50]}...")
-    
     chat_name = chat_data.get("chat_name", "Unnamed Chat")
     is_groupchat = chat_data.get("is_groupchat", False)
     member_ids = chat_data.get("member_ids", [])
     
-    if sid not in unique_users:
+    if client_manager.isOnline(sid) :
         await sio.emit("chat_creation_error", {"message": "User not authenticated"}, room=sid)
         return
     
-    creator = unique_users[sid]
-    creator_id = creator['keycloak_id']
+    creator = client_manager.getUserWithSID(sid)
+    creator_id = creator["sub"]
     
     if creator_id not in member_ids:
         member_ids.append(creator_id)  # ให้แน่ใจว่า creator อยู่ในแชทด้วย
@@ -277,17 +175,6 @@ async def direct_msg(sid, data):
     timestamp = datetime.now().strftime('%H:%M:%S')
     print(f"Private message from {sender_id} -> {chat_id}: {message}")
 
-    # Find receiver if online user finish we will implement
-    # if receiver_id in online_users:
-    #     receiver_sid = online_users[receiver_id]
-    #     sio.emit("private_message", {
-    #         "sender_id": sender_id,
-    #         "message": message,
-    #         "timestamp": eventlet.green.time.time()
-    #     }, to=receiver_sid)
-    # else:
-    #     print(f"User {receiver_id} is offline")
-        # Optionally save message in DB for later delivery
     # Create a proper Message model instance
     new_message = Message(
         sender_id=sender_id,
@@ -313,6 +200,3 @@ async def direct_msg(sid, data):
             "message": message,
             "timestamp": timestamp
         }, to=receiver_id)
-
-if __name__=="__main__":
-    uvicorn.run("Soket_io:app", host="0.0.0.0", port=7777, lifespan="on", reload=True)
