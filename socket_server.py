@@ -38,7 +38,10 @@ async def connect(sid,env):
 async def disconnect(sid):
     print("Client Disconnected: " + " " + str(sid))
     flag = 0
-    
+    for room in sio.rooms[sid]:
+        if room != sid:
+            await sio.leave_room(sid, room)
+            print(f"User {sid} left room {room} on disconnect")
     if sid in unique_users:
         # ลบ session
         name = unique_users[sid].get('username', f'ผู้ใช้_{sid[:8]}')
@@ -204,27 +207,40 @@ async def create_chat(sid, chat_data):
             "name": new_chat.name,
             "is_groupchat": new_chat.is_groupchat,
             "member_ids": member_ids
-        }, room=sid)
+        }, room=new_chat.cid)
         
     except Exception as e:
         print(f"❌ Error creating chat: {e}")
         await sio.emit("chat_creation_error", {"message": f"Error: {str(e)}"}, room=sid)
+
+@sio.on('join_chat')
+async def join_chat(sid, cid):
+    await sio.enter_room(sid, cid)
+    print(f"User {sid} joined chat room {cid}")
+    await sio.emit("user_joined", {"user_id": sid}, room=cid)
+
+@sio.on('leave_chat')
+async def leave_chat(sid, cid):
+    await sio.leave_room(sid, cid)
+    print(f"User {sid} left chat room {cid}")
+    await sio.emit("user_left", {"user_id": sid}, room=cid)
 
 @sio.on('msg')
 async def client_side_receive_msg(sid, msg):
     print("Msg receive from " +str(sid) +"and msg is : ",str(msg))
     await sio.emit("send_msg", str(msg))
     
-@sio.on("Direct_Msg")
+@sio.on("sent_message")
 async def direct_msg(sid, data):
     """
         Expected data format:
         {
+            "cid": "chat_id",
             "message": "Hello!"
         }
     """
     sender_id = data["sender_id"]
-    chat_id = data["chat_id"]
+    chat_id = data["cid"]
     message = data["message"]
     timestamp = datetime.now().strftime('%H:%M:%S')
     print(f"Private message from {sender_id} -> {chat_id}: {message}")
