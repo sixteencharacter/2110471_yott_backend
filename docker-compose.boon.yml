@@ -13,23 +13,25 @@ services:
       KEYCLOAK_ADMIN : yott
       KEYCLOAK_ADMIN_PASSWORD : strongpassword
       KC_HOSTNAME_STRICT_HTTPS: false
-      KC_HOSTNAME_STRICT : false
-      KC_HTTP_ENABLED : true
     command : 
       - start-dev
+    networks:
+      - iboon_network
 
   db:
-      image: postgres
-      restart: always
-      shm_size: 128mb
-      environment:
-          POSTGRES_PASSWORD: strongpassword
-          POSTGRES_USER: yott
-          POSTGRES_DB: yottdb
-      ports:
-          - 5435:5432
-      volumes:
-          - pgdata:/var/lib/postgresql/data
+    image: postgres
+    restart: always
+    shm_size: 128mb
+    environment:
+        POSTGRES_PASSWORD: strongpassword
+        POSTGRES_USER: yott
+        POSTGRES_DB: yottdb
+    ports:
+        - 5435:5432
+    volumes:
+        - pgdata:/var/lib/postgresql/data
+    networks:
+      - iboon_network
 
   pgadmin:
     image: dpage/pgadmin4
@@ -41,6 +43,21 @@ services:
         - 5555:80
     depends_on:
         - db
+        
+  iboon_fastapi:
+    build:
+      context: . # Path to the directory containing the Dockerfile
+      dockerfile: Dockerfile # Optional: specify if not named 'Dockerfile' or in a different location
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    networks:
+      - iboon_network
+
+networks:
+  iboon_network:
+    driver: bridge
 
 volumes:
     pgdata:

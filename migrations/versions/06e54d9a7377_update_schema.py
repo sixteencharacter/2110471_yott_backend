@@ -1,8 +1,8 @@
-"""chage id type to int
+"""update schema
 
-Revision ID: 0e295b6fc265
+Revision ID: 06e54d9a7377
 Revises: 
-Create Date: 2025-10-15 21:00:38.749571
+Create Date: 2025-10-17 18:39:46.730205
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '0e295b6fc265'
+revision: str = '06e54d9a7377'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -28,7 +28,7 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('cid')
     )
     op.create_table('yott_person',
-    sa.Column('uid', sa.Integer(), nullable=False),
+    sa.Column('uid', sa.Text(), nullable=False),
     sa.Column('email', sa.Text(), nullable=True),
     sa.Column('given_name', sa.Text(), nullable=True),
     sa.Column('family_name', sa.Text(), nullable=True),
@@ -38,7 +38,7 @@ def upgrade() -> None:
     op.create_table('yott_message',
     sa.Column('mid', sa.Integer(), nullable=False),
     sa.Column('data', sa.Text(), nullable=True),
-    sa.Column('s_id', sa.Integer(), nullable=True),
+    sa.Column('s_id', sa.Text(), nullable=True),
     sa.Column('cid', sa.Integer(), nullable=True),
     sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.ForeignKeyConstraint(['cid'], ['yott_chat.cid'], ),
@@ -47,7 +47,7 @@ def upgrade() -> None:
     )
     op.create_table('yott_user_belong_to_chat',
     sa.Column('rid', sa.Integer(), nullable=False),
-    sa.Column('uid', sa.Integer(), nullable=True),
+    sa.Column('uid', sa.Text(), nullable=True),
     sa.Column('cid', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['cid'], ['yott_chat.cid'], ),
     sa.ForeignKeyConstraint(['uid'], ['yott_person.uid'], ),

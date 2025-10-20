@@ -18,6 +18,7 @@ async def validate_access_token(
 ):
     url = config.KC_CERT_URL
     optional_custom_headers = {"User-agent": "yott-backend-agent"}
+    print(url)
     jwks_client = PyJWKClient(url, headers=optional_custom_headers)
 
     try:
@@ -47,3 +48,11 @@ async def validate_access_token(
     except jwt.exceptions.InvalidTokenError as err:
         print(err)
         raise HTTPException(status_code=401, detail="Not authenticated")
+    
+async def validate_accessToken_without_raise(token : str) :
+    data , err = None , None
+    try :
+        data = await validate_access_token(token)
+    except Exception as e :
+        err = e
+    return data , err
