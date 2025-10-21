@@ -139,20 +139,25 @@ async def create_chat(sid, chat_data):
             db.add(new_chat)
             await db.flush()  # เพื่อให้ได้ chat ID
             
+            # เก็บค่าที่ต้องการใช้ก่อนออกจาก session
+            chat_id = new_chat.cid
+            chat_name_final = new_chat.name
+            is_groupchat_final = new_chat.is_groupchat
+            
             # เพิ่มสมาชิกในแชท
             for member_id in member_ids:
-                user_b2c = user_belong_to_chat(uid=member_id, cid=new_chat.cid)
+                user_b2c = user_belong_to_chat(uid=member_id, cid=chat_id)
                 db.add(user_b2c)
             
             await db.commit()
         
-        print(f"✅ Chat '{chat_name}' created with ID {new_chat.cid}")
+        # print(f"✅ Chat '{chat_name_final}' created with ID {chat_id}")
         await sio.emit("chat_created", {
-            "cid": new_chat.cid,
-            "name": new_chat.name,
-            "is_groupchat": new_chat.is_groupchat,
+            "cid": chat_id,
+            "name": chat_name_final,
+            "is_groupchat": is_groupchat_final,
             "member_ids": member_ids
-        }, room=new_chat.cid)
+        }, room=str(chat_id))
         
     except Exception as e:
         print(f"❌ Error creating chat: {e}")
