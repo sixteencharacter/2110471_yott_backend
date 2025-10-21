@@ -119,7 +119,8 @@ async def create_chat(sid, chat_data):
     chat_name = chat_data.get("chat_name", "Unnamed Chat")
     is_groupchat = chat_data.get("is_groupchat", False)
     member_ids = chat_data.get("member_ids", [])
-    
+    print(chat_data)
+    print(chat_name, is_groupchat, member_ids)
     if client_manager.isOnline(sid) :
         await sio.emit("chat_creation_error", {"message": "User not authenticated"}, room=sid)
         return
@@ -134,6 +135,7 @@ async def create_chat(sid, chat_data):
         async with sessionmanager.session() as db:
             # สร้างแชทใหม่
             new_chat = Chat(name=chat_name, is_groupchat=is_groupchat)
+            print("new_chat:", new_chat)
             db.add(new_chat)
             await db.flush()  # เพื่อให้ได้ chat ID
             
