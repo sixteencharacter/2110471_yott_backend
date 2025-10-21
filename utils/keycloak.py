@@ -5,13 +5,13 @@ sys.path.append(os.getcwd())
 import jwt
 from jwt import PyJWKClient
 from fastapi import Depends
-from typing import Annotated
+from typing import Annotated , Optional
 from fastapi import HTTPException
 from config import oauth_2_scheme
 import config
 from .database import sessionmanager
 from models import Person
-from services import kc_user_cache
+from services import kc_user_cache , Cache
 
 async def validate_access_token(
     access_token: Annotated[str, Depends(oauth_2_scheme)]
@@ -49,10 +49,18 @@ async def validate_access_token(
         print(err)
         raise HTTPException(status_code=401, detail="Not authenticated")
     
-async def validate_accessToken_without_raise(token : str) :
+async def validate_accessToken_without_raise(token : str , cache_engine : Optional[Cache] = None) :
     data , err = None , None
     try :
         data = await validate_access_token(token)
+        cache_engine.set(token,data)
     except Exception as e :
-        err = e
+        if cache_engine :
+            if cache_engine.get(token) is not None:
+                data = cache_engine.get(token)        
+            else :
+                err = e
+        else : 
+            err = e
+
     return data , err

@@ -5,6 +5,7 @@ from sqlalchemy import select
 from models import Person , Chat , user_belong_to_chat , Message
 from typing import Dict 
 from datetime import datetime
+from services import kc_socketio_cache
 
 # Socket IO server instance 
 sio = socketio.AsyncServer(cors_allowed_origins=[],allow_upgrades=True,async_mode='asgi')
@@ -51,7 +52,7 @@ async def connect(sid,env):
         authToken = [e for e in env['asgi.scope']['headers'] if e[0] == b"authorization"][0][1].decode("utf-8").replace("Bearer","").strip()
     except :
         authToken = "Failed Token"
-    userData , err = await validate_accessToken_without_raise(authToken)
+    userData , err = await validate_accessToken_without_raise(authToken,kc_socketio_cache)
     if err is not None :
         await sio.disconnect(sid)
     else :
@@ -119,9 +120,8 @@ async def create_chat(sid, chat_data):
     chat_name = chat_data.get("chat_name", "Unnamed Chat")
     is_groupchat = chat_data.get("is_groupchat", False)
     member_ids = chat_data.get("member_ids", [])
-    print(chat_data)
-    print(chat_name, is_groupchat, member_ids)
-    if client_manager.isOnline(sid) :
+
+    if not client_manager.isOnline(sid) :
         await sio.emit("chat_creation_error", {"message": "User not authenticated"}, room=sid)
         return
     
