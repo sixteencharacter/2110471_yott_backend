@@ -5,6 +5,7 @@ from sqlalchemy import select
 from models import Person , Chat , user_belong_to_chat , Message
 from typing import Dict 
 from datetime import datetime
+from services import kc_socketio_cache
 
 # Socket IO server instance 
 sio = socketio.AsyncServer(cors_allowed_origins=[],allow_upgrades=True,async_mode='asgi')
@@ -51,7 +52,7 @@ async def connect(sid,env):
         authToken = [e for e in env['asgi.scope']['headers'] if e[0] == b"authorization"][0][1].decode("utf-8").replace("Bearer","").strip()
     except :
         authToken = "Failed Token"
-    userData , err = await validate_accessToken_without_raise(authToken)
+    userData , err = await validate_accessToken_without_raise(authToken,kc_socketio_cache)
     if err is not None :
         await sio.disconnect(sid)
     else :
@@ -119,8 +120,8 @@ async def create_chat(sid, chat_data):
     chat_name = chat_data.get("chat_name", "Unnamed Chat")
     is_groupchat = chat_data.get("is_groupchat", False)
     member_ids = chat_data.get("member_ids", [])
-    
-    if client_manager.isOnline(sid) :
+
+    if not client_manager.isOnline(sid) :
         await sio.emit("chat_creation_error", {"message": "User not authenticated"}, room=sid)
         return
     
@@ -132,45 +133,88 @@ async def create_chat(sid, chat_data):
     
     try:
         async with sessionmanager.session() as db:
+            if not is_groupchat:
+                # Check if DM already exists between these users
+                user_groupchat = await db.execute(
+                    select(user_belong_to_chat.cid)
+                    .join(Chat, Chat.cid == user_belong_to_chat.cid)
+                    .where(
+                        user_belong_to_chat.uid == creator_id,
+                        Chat.is_groupchat == False  # Fixed: should be False, not creator_id
+                    )
+                )
+                user_groupchat_result = user_groupchat.scalars().all()
+
+                if user_groupchat_result:
+                    existing_user_dm = await db.execute(
+                        select(user_belong_to_chat.uid)
+                        .where(user_belong_to_chat.cid.in_(user_groupchat_result))
+                        .where(user_belong_to_chat.uid != creator_id)
+                    )
+                    existing_dms = existing_user_dm.scalars().all()
+                    partner_ids = [uid for uid in member_ids if uid != creator_id]
+                    if partner_ids[0] in existing_dms:
+                        await sio.emit("handle_1_dm_exists", {"message": "Direct message already exists between these users."}, room=sid)
+                        return
+
             # สร้างแชทใหม่
             new_chat = Chat(name=chat_name, is_groupchat=is_groupchat)
+            print("new_chat:", new_chat)
             db.add(new_chat)
             await db.flush()  # เพื่อให้ได้ chat ID
             
+            # เก็บค่าที่ต้องการใช้ก่อนออกจาก session
+            chat_id = new_chat.cid
+            chat_name_final = new_chat.name
+            is_groupchat_final = new_chat.is_groupchat
+            
             # เพิ่มสมาชิกในแชท
             for member_id in member_ids:
-                user_b2c = user_belong_to_chat(uid=member_id, cid=new_chat.cid)
+                user_b2c = user_belong_to_chat(uid=member_id, cid=chat_id)
                 db.add(user_b2c)
             
             await db.commit()
         
-        print(f"✅ Chat '{chat_name}' created with ID {new_chat.cid}")
+        # print(f"✅ Chat '{chat_name_final}' created with ID {chat_id}")
         await sio.emit("chat_created", {
-            "cid": new_chat.cid,
-            "name": new_chat.name,
-            "is_groupchat": new_chat.is_groupchat,
+            "cid": chat_id,
+            "name": chat_name_final,
+            "is_groupchat": is_groupchat_final,
             "member_ids": member_ids
-        }, room=sid)
+        }, room=str(chat_id))
         
     except Exception as e:
         print(f"❌ Error creating chat: {e}")
         await sio.emit("chat_creation_error", {"message": f"Error: {str(e)}"}, room=sid)
+
+@sio.on('join_chat')
+async def join_chat(sid, cid):
+    await sio.enter_room(sid, cid)
+    print(f"User {sid} joined chat room {cid}")
+    await sio.emit("user_joined", {"user_id": sid}, room=cid)
+
+@sio.on('leave_chat')
+async def leave_chat(sid, cid):
+    await sio.leave_room(sid, cid)
+    print(f"User {sid} left chat room {cid}")
+    await sio.emit("user_left", {"user_id": sid}, room=cid)
 
 @sio.on('msg')
 async def client_side_receive_msg(sid, msg):
     print("Msg receive from " +str(sid) +"and msg is : ",str(msg))
     await sio.emit("send_msg", str(msg))
     
-@sio.on("Direct_Msg")
+@sio.on("sent_message")
 async def direct_msg(sid, data):
     """
         Expected data format:
         {
+            "cid": "chat_id",
             "message": "Hello!"
         }
     """
     sender_id = data["sender_id"]
-    chat_id = data["chat_id"]
+    chat_id = data["cid"]
     message = data["message"]
     timestamp = datetime.now().strftime('%H:%M:%S')
     print(f"Private message from {sender_id} -> {chat_id}: {message}")

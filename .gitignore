@@ -212,3 +212,5 @@ keycloak*
 .DS_STORE
 
 test*
+
+migrations/versions/*.py
