@@ -6,7 +6,7 @@ from .models import Base
 class Message(Base):
     __tablename__ = "yott_message"
 
-    mid = Column(Integer, primary_key=True, default=uuid.uuid4)
+    mid = Column(Integer, primary_key=True, autoincrement=True)
     data = Column(Text())
     s_id = Column(Text, ForeignKey("yott_person.uid")) #sender id
     cid = Column(Integer, ForeignKey("yott_chat.cid")) #chat id
