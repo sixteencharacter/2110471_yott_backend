@@ -217,7 +217,7 @@ async def send_message(sid, data):
     creator_id = creator["sub"]
 
     chat_id = data["cid"]
-    message = data["message"]
+    message = str(data["message"])
     print(f"Private message from {creator_id} -> {chat_id}: {message}")
 
     # Create a proper Message model instance
@@ -231,8 +231,8 @@ async def send_message(sid, data):
         db.add(new_message)
         await db.commit()
 
-    await sio.rooms(chat_id).emit("receive_msg", {
+    await sio.emit("receive_msg", {
             "s_id": creator_id,
             "data": message,
             "cid": chat_id
-        })
+        }, room=chat_id)
