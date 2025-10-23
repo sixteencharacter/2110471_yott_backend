@@ -204,8 +204,8 @@ async def client_side_receive_msg(sid, msg):
     print("Msg receive from " +str(sid) +"and msg is : ",str(msg))
     await sio.emit("send_msg", str(msg))
     
-@sio.on("sent_message")
-async def sent_message(sid, data):
+@sio.on("send_message")
+async def send_message(sid, data):
     """
         Expected data format:
         {
