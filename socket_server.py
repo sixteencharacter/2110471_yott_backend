@@ -133,6 +133,30 @@ async def create_chat(sid, chat_data):
     
     try:
         async with sessionmanager.session() as db:
+            if not is_groupchat:
+                # Check if DM already exists between these users
+                user_groupchat = await db.execute(
+                    select(user_belong_to_chat.cid)
+                    .join(Chat, Chat.cid == user_belong_to_chat.cid)
+                    .where(
+                        user_belong_to_chat.uid == creator_id,
+                        Chat.is_groupchat == False  # Fixed: should be False, not creator_id
+                    )
+                )
+                user_groupchat_result = user_groupchat.scalars().all()
+
+                if user_groupchat_result:
+                    existing_user_dm = await db.execute(
+                        select(user_belong_to_chat.uid)
+                        .where(user_belong_to_chat.cid.in_(user_groupchat_result))
+                        .where(user_belong_to_chat.uid != creator_id)
+                    )
+                    existing_dms = existing_user_dm.scalars().all()
+                    partner_ids = [uid for uid in member_ids if uid != creator_id]
+                    if partner_ids[0] in existing_dms:
+                        await sio.emit("handle_1_dm_exists", {"message": "Direct message already exists between these users."}, room=sid)
+                        return
+
             # สร้างแชทใหม่
             new_chat = Chat(name=chat_name, is_groupchat=is_groupchat)
             print("new_chat:", new_chat)
