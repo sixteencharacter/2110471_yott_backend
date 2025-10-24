@@ -269,3 +269,20 @@ async def send_message(sid, data):
         print(f"❌ Error saving message: {e}")
         await sio.emit("message_error", {"message": f"Error: {str(e)}"}, room=sid)
         return
+
+    # enroll to chatroom
+    @sio.on('chatroom_enroll')
+    async def chatroom_enroll(sid, cid):
+
+        creator = client_manager.getUserWithSID(sid)
+        creator_id = creator["sub"]
+
+        try:
+            async with sessionmanager.session() as db:
+                new_relation = user_belong_to_chat(uid=creator_id ,cid=cid)
+                db.add()
+                await db.commit()
+            await client_manager.broadcastToRoom(sio,"chatroom_enrollment","New Client!",cid)
+        except :
+            print("Chatroom Enrollment failed!")
+            pass
