@@ -75,6 +75,7 @@ async def connect(sid,env):
         authToken = "Failed Token"
     userData , err = await validate_accessToken_without_raise(authToken,kc_socketio_cache)
     if err is not None :
+        print(err)
         await sio.disconnect(sid)
     else :
         client_manager.add_client(sid,userData)

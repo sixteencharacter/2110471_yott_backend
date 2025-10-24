@@ -3,7 +3,7 @@ import sys
 sys.path.append(os.getcwd())
 
 import jwt
-from jwt import PyJWKClient
+from jwt import PyJWKClient , InvalidTokenError
 from fastapi import Depends
 from typing import Annotated , Optional
 from fastapi import HTTPException
@@ -12,13 +12,13 @@ import config
 from .database import sessionmanager
 from models import Person
 from services import kc_user_cache , Cache
+from sqlalchemy import select
 
 async def validate_access_token(
     access_token: Annotated[str, Depends(oauth_2_scheme)]
 ):
-    url = config.KC_CERT_URL
+    url = config.KC_CERT_URL if config.KC_CERT_URL is not None else "www.google.com"
     optional_custom_headers = {"User-agent": "yott-backend-agent"}
-    print(url)
     jwks_client = PyJWKClient(url, headers=optional_custom_headers)
 
     try:
@@ -39,28 +39,41 @@ async def validate_access_token(
                 email = data["email"],
                 uid = data["sub"]
             )
-            if kc_user_cache.get(new_user.uid) is None : # if cache missed
-                await session.merge(new_user)
-                await session.commit()
-                kc_user_cache.set(new_user.uid,True)
+            existing_user = (await session.get(Person,new_user.uid))
 
+            if kc_user_cache.get(new_user.uid) is None : # if cache missed
+                if existing_user is not None:
+                    existing_user.family_name = new_user.family_name
+                    existing_user.given_name = new_user.given_name
+                    existing_user.preferred_username = new_user.preferred_username
+                    existing_user.email = new_user.email
+                    await session.commit()
+                else :
+                    session.add(new_user)
+                    await session.commit()
+                    await session.refresh(new_user)
+
+                kc_user_cache.set(new_user.uid,True)
         return data
-    except jwt.exceptions.InvalidTokenError as err:
+    except InvalidTokenError as err:
         print(err)
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
+    # except Exception as e :
+    #     print(e)
+
 async def validate_accessToken_without_raise(token : str , cache_engine : Optional[Cache] = None) :
     data , err = None , None
     try :
         data = await validate_access_token(token)
-        cache_engine.set(token,data)
+        if cache_engine is not None :
+            cache_engine.set(token,data)
     except Exception as e :
         if cache_engine :
             if cache_engine.get(token) is not None:
-                data = cache_engine.get(token)        
+                data = cache_engine.get(token)
             else :
                 err = e
-        else : 
+        else :
             err = e
 
     return data , err
