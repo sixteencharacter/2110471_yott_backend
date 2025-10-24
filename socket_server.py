@@ -226,13 +226,20 @@ async def send_message(sid, data):
         data=message,
         cid=chat_id,
     )
-    
-    async with sessionmanager.session() as db:
-        db.add(new_message)
-        await db.commit()
-
-    await sio.emit("receive_msg", {
-            "s_id": creator_id,
-            "data": message,
-            "cid": chat_id
-        }, room=chat_id)
+    try:
+        async with sessionmanager.session() as db:
+            db.add(new_message)
+            await db.flush()
+            timestamp = new_message.timestamp.isoformat()
+            await db.commit()
+        await sio.emit("receive_msg", {
+                "s_id": creator_id,
+                "s_name" : creator["preferred_username"],
+                "message": message,
+                "timestamp": timestamp,
+                "cid": chat_id
+            }, room=chat_id)
+    except Exception as e:
+        print(f"❌ Error saving message: {e}")
+        await sio.emit("message_error", {"message": f"Error: {str(e)}"}, room=sid)
+        return
