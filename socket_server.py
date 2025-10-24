@@ -204,8 +204,8 @@ async def client_side_receive_msg(sid, msg):
     print("Msg receive from " +str(sid) +"and msg is : ",str(msg))
     await sio.emit("send_msg", str(msg))
     
-@sio.on("sent_message")
-async def direct_msg(sid, data):
+@sio.on("send_message")
+async def send_message(sid, data):
     """
         Expected data format:
         {
@@ -213,34 +213,26 @@ async def direct_msg(sid, data):
             "message": "Hello!"
         }
     """
-    sender_id = data["sender_id"]
+    creator = client_manager.getUserWithSID(sid)
+    creator_id = creator["sub"]
+
     chat_id = data["cid"]
-    message = data["message"]
-    timestamp = datetime.now().strftime('%H:%M:%S')
-    print(f"Private message from {sender_id} -> {chat_id}: {message}")
+    message = str(data["message"])
+    print(f"Private message from {creator_id} -> {chat_id}: {message}")
 
     # Create a proper Message model instance
     new_message = Message(
-        sender_id=sender_id,
-        chat_id=chat_id,
-        content=message
+        s_id=creator_id,
+        data=message,
+        cid=chat_id,
     )
     
     async with sessionmanager.session() as db:
         db.add(new_message)
         await db.commit()
-        
-        # Get receiver ID 
-        result = await db.execute(select(Person.uid).where(Person.id == chat_id).where(Person.id != sender_id))
-        receiver_id = result.scalar_one_or_none()
 
-    if not receiver_id:
-        # Handle case where receiver is not found
-        print(f"Receiver not found for chat_id: {chat_id}")
-        return
-
-    await sio.emit("Direct_Msg", {
-            "sender_id": sender_id,
-            "message": message,
-            "timestamp": timestamp
-        }, to=receiver_id)
+    await sio.emit("receive_msg", {
+            "s_id": creator_id,
+            "data": message,
+            "cid": chat_id
+        }, room=chat_id)
