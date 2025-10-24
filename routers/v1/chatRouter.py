@@ -7,11 +7,19 @@ from utils import validate_access_token , get_db
 from models import Chat
 from icecream import ic
 
-router = APIRouter(prefix="/chat",tags=["chat"])
+router = APIRouter(prefix="/chats",tags=["chat"])
 
 @router.get("/")
 async def get_all_available_chatroom(userData : Annotated[dict,Depends(validate_access_token)],db : AsyncSession = Depends(get_db)):
     # print("User Data:", userData)
     chats = await db.execute(select(Chat))
-    
+
     return JSONResponse(chats.all())
+
+@router.get("/{id}/members")
+async def list_chat_member() :
+    pass
+
+@router.post("/{id}/members")
+async def list_chat_member() :
+    pass

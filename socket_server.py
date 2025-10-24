@@ -3,11 +3,11 @@ import socketio
 from services import sessionmanager
 from sqlalchemy import select
 from models import Person , Chat , user_belong_to_chat , Message
-from typing import Dict 
+from typing import Dict , Any , List , Set
 from datetime import datetime
 from services import kc_socketio_cache
 
-# Socket IO server instance 
+# Socket IO server instance
 sio = socketio.AsyncServer(cors_allowed_origins=[],allow_upgrades=True,async_mode='asgi')
 
 # ASGI application ready to be mounted with the FastAPI
@@ -17,7 +17,8 @@ class SocketIOManager :
 
     def __init__(self) :
         self.user_counter : int = 0
-        self.user_mapper : Dict[str,Dict[str,any]] = dict()
+        self.user_mapper : Dict[str,Dict[str,Any]] = dict()
+        self.room_mapper : Dict[str,Set[str]] = dict()
 
     def add_client(self,cid : str , decoded_data : dict) :
         self.user_mapper[cid] = decoded_data
@@ -32,15 +33,35 @@ class SocketIOManager :
 
     def get_user_count(self) :
         return self.user_counter
-    
+
     def isOnline(self,sid : str) :
         return sid in self.user_mapper
-    
+
     def getUserWithSID(self,sid : str) :
         if sid in self.user_mapper :
             return self.user_mapper[sid]
         else :
             return None
+
+    def joinRoom(self,cid,roomId) :
+        if roomId not in self.room_mapper :
+            self.room_mapper[roomId] = set()
+        if cid in self.user_mapper :
+            self.room_mapper[roomId].add(cid)
+
+    async def broadcastToRoom(self,sio_client : socketio.AsyncServer,topic : str , payload : Any , roomId : str) :
+        new_user_room_list = set()
+        print(self.room_mapper , roomId)
+        if roomId in self.room_mapper :
+            print("Found roomId",roomId)
+            for receiver in self.room_mapper[roomId] :
+                print("Found receiver",receiver)
+                if receiver in self.user_mapper :
+                    print("Receiver {} online".format(receiver))
+                    await sio_client.emit(topic,payload,to=receiver)
+                    new_user_room_list.add(receiver)
+            self.room_mapper[roomId] = new_user_room_list
+
 
 client_manager = SocketIOManager()
 
@@ -59,7 +80,7 @@ async def connect(sid,env):
         client_manager.add_client(sid,userData)
     await broadcast_user_list()
 
-    
+
 @sio.on("disconnect")
 async def disconnect(sid):
 
@@ -70,13 +91,13 @@ async def disconnect(sid):
 
 
 async def broadcast_user_list():
- 
+
     async with sessionmanager.session() as db:
         result = await db.execute(
             select(Person.uid, Person.preferred_username, Person.given_name, Person.family_name, Person.email)
         )
         user_db_rows = result.fetchall()
-        
+
     all_users = dict()
 
     for row in user_db_rows:
@@ -89,15 +110,15 @@ async def broadcast_user_list():
             'family_name': family_name,
             'display_name': display_name,
             'email': email,
-            'status': 'offline'  
+            'status': 'offline'
         }
 
     online_clients = client_manager.get_all_available_clients()
-    
+
     for user in all_users:
         if(user in online_clients):
             all_users[user]['status'] = 'online'
-        
+
 
     user_list = {
         'users': list(all_users.values()),
@@ -105,8 +126,8 @@ async def broadcast_user_list():
     }
 
     await sio.emit("online_users_update", user_list)
-    
-    
+
+
 @sio.on('create_chat')
 async def create_chat(sid, chat_data):
     """
@@ -124,13 +145,13 @@ async def create_chat(sid, chat_data):
     if not client_manager.isOnline(sid) :
         await sio.emit("chat_creation_error", {"message": "User not authenticated"}, room=sid)
         return
-    
+
     creator = client_manager.getUserWithSID(sid)
     creator_id = creator["sub"]
-    
+
     if creator_id not in member_ids:
         member_ids.append(creator_id)  # ให้แน่ใจว่า creator อยู่ในแชทด้วย
-    
+
     try:
         async with sessionmanager.session() as db:
             if not is_groupchat:
@@ -162,19 +183,19 @@ async def create_chat(sid, chat_data):
             print("new_chat:", new_chat)
             db.add(new_chat)
             await db.flush()  # เพื่อให้ได้ chat ID
-            
+
             # เก็บค่าที่ต้องการใช้ก่อนออกจาก session
             chat_id = new_chat.cid
             chat_name_final = new_chat.name
             is_groupchat_final = new_chat.is_groupchat
-            
+
             # เพิ่มสมาชิกในแชท
             for member_id in member_ids:
                 user_b2c = user_belong_to_chat(uid=member_id, cid=chat_id)
                 db.add(user_b2c)
-            
+
             await db.commit()
-        
+
         # print(f"✅ Chat '{chat_name_final}' created with ID {chat_id}")
         await sio.emit("chat_created", {
             "cid": chat_id,
@@ -182,16 +203,17 @@ async def create_chat(sid, chat_data):
             "is_groupchat": is_groupchat_final,
             "member_ids": member_ids
         }, room=str(chat_id))
-        
+
     except Exception as e:
         print(f"❌ Error creating chat: {e}")
         await sio.emit("chat_creation_error", {"message": f"Error: {str(e)}"}, room=sid)
 
 @sio.on('join_chat')
 async def join_chat(sid, cid):
-    await sio.enter_room(sid, cid)
+    # await sio.enter_room(sid, cid)
+    client_manager.joinRoom(sid,str(cid))
     print(f"User {sid} joined chat room {cid}")
-    await sio.emit("user_joined", {"user_id": sid}, room=cid)
+    await sio.emit("user_joined", {"user_id": sid}, to=sid)
 
 @sio.on('leave_chat')
 async def leave_chat(sid, cid):
@@ -203,7 +225,7 @@ async def leave_chat(sid, cid):
 async def client_side_receive_msg(sid, msg):
     print("Msg receive from " +str(sid) +"and msg is : ",str(msg))
     await sio.emit("send_msg", str(msg))
-    
+
 @sio.on("send_message")
 async def send_message(sid, data):
     """
@@ -227,19 +249,23 @@ async def send_message(sid, data):
         cid=chat_id,
     )
     try:
+
         async with sessionmanager.session() as db:
             db.add(new_message)
             await db.flush()
             timestamp = new_message.timestamp.isoformat()
             await db.commit()
-        await sio.emit("receive_msg", {
-                "s_id": creator_id,
-                "s_name" : creator["preferred_username"],
+
+        await client_manager.broadcastToRoom(sio,"receive_msg",{
+            "s_id": creator_id,
+            "s_name" : creator["preferred_username"],
                 "message": message,
                 "timestamp": timestamp,
-                "cid": chat_id
-            }, room=chat_id)
+            "cid": chat_id
+        },roomId=str(chat_id))
+
     except Exception as e:
+
         print(f"❌ Error saving message: {e}")
         await sio.emit("message_error", {"message": f"Error: {str(e)}"}, room=sid)
         return
