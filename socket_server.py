@@ -78,6 +78,7 @@ async def connect(sid,env):
         print(err)
         await sio.disconnect(sid)
     else :
+        print("User connected:", userData)
         client_manager.add_client(sid,userData)
     await broadcast_user_list()
 
@@ -123,7 +124,6 @@ async def broadcast_user_list():
 
     user_list = {
         'users': list(all_users.values()),
-        'total_count': client_manager.get_user_count(),
     }
 
     await sio.emit("online_users_update", user_list)
