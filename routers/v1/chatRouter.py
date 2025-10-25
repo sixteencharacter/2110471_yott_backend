@@ -12,7 +12,6 @@ router = APIRouter(prefix="/chats",tags=["chat"])
 
 @router.get("/")
 async def get_all_available_chatroom(userData : Annotated[dict,Depends(validate_access_token)],db : AsyncSession = Depends(get_db)):
-    # print("User Data:", userData)
     chats = await db.execute(select(Chat))
 
     return JSONResponse(chats.all())
@@ -22,7 +21,7 @@ async def list_chat_member(chatId : str,userData : Annotated[dict,Depends(valida
     query = """
         select P.uid , P.given_name , P.family_name , preferred_username from yott_user_belong_to_chat R
         join yott_person P on R.uid = P.uid
-        where cid = :chatId
+        where R.cid = :chatId
     """
     members = await db.execute(text(query),{"chatId" : int(chatId)})
     return JSONResponse(populate_query_result(members))
