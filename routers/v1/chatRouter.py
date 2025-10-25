@@ -12,7 +12,6 @@ router = APIRouter(prefix="/chats",tags=["chat"])
 
 @router.get("/")
 async def get_all_available_chatroom(userData : Annotated[dict,Depends(validate_access_token)],db : AsyncSession = Depends(get_db)):
-    # print("User Data:", userData)
     chats = await db.execute(select(Chat))
 
     return JSONResponse(chats.all())

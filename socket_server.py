@@ -78,7 +78,6 @@ async def connect(sid,env):
         print(err)
         await sio.disconnect(sid)
     else :
-        print("User connected:", userData)
         client_manager.add_client(sid,userData)
     await broadcast_user_list()
 

@@ -58,8 +58,7 @@ async def validate_access_token(
     except InvalidTokenError as err:
         print(err)
         raise HTTPException(status_code=401, detail="Not authenticated")
-    # except Exception as e :
-    #     print(e)
+
 
 async def validate_accessToken_without_raise(token : str , cache_engine : Optional[Cache] = None) :
     data , err = None , None

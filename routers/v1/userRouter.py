@@ -30,7 +30,6 @@ async def get_user_chats(userData : Annotated[dict,Depends(validate_access_token
     )
     
     chats = result.scalars().all()
-    # print("Chats:", chats)
     
     # Convert to serializable format
     chat_list = []
