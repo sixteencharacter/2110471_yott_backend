@@ -103,18 +103,15 @@ async def broadcast_user_list():
     all_users = dict()
 
     for row in user_db_rows:
-        uid, username, given_name, family_name, email = row
-        display_name = f"{given_name or ''} {family_name or ''}".strip() or username
+        uid, preferred_username, given_name, family_name, email = row
         all_users[uid] = {
             'uid': uid,
-            'username': username,
             'given_name': given_name,
             'family_name': family_name,
-            'display_name': display_name,
+            'display_name': preferred_username,
             'email': email,
             'status': 'offline'
         }
-
     online_clients = client_manager.get_all_available_clients()
 
     for user in all_users:
