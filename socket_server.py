@@ -1,7 +1,7 @@
-from utils import validate_accessToken_without_raise
+from utils import validate_accessToken_without_raise , populate_query_result
 import socketio
 from services import sessionmanager
-from sqlalchemy import select
+from sqlalchemy import select , text
 from models import Person , Chat , user_belong_to_chat , Message
 from typing import Dict , Any , List , Set
 from datetime import datetime
@@ -124,6 +124,16 @@ async def broadcast_user_list():
 
     await sio.emit("online_users_update", user_list)
 
+async def getChatMembers(chatId : str) :
+    query = """
+        select P.uid , P.given_name , P.family_name , preferred_username from yott_user_belong_to_chat R
+        join yott_person P on R.uid = P.uid
+        where R.cid = :chatId
+    """
+    async with sessionmanager.session() as db:
+        members = await db.execute(text(query),{"chatId" : int(chatId)})
+        all_chats = populate_query_result(members)
+        return all_chats
 
 @sio.on('create_chat')
 async def create_chat(sid, chat_data):
@@ -212,6 +222,9 @@ async def join_chat(sid, cid):
     print(f"User {sid} joined chat room {cid}")
     await sio.emit("user_joined", {"user_id": sid}, to=sid)
 
+    await sio.emit("chat_member_update",await getChatMembers(cid),sid)
+    await client_manager.broadcastToRoom(sio,"chat_member_update",await getChatMembers(cid),cid)
+
 @sio.on('leave_chat')
 async def leave_chat(sid, cid):
     await sio.leave_room(sid, cid)
@@ -267,19 +280,18 @@ async def send_message(sid, data):
         await sio.emit("message_error", {"message": f"Error: {str(e)}"}, room=sid)
         return
 
-    # enroll to chatroom
-    @sio.on('chatroom_enroll')
-    async def chatroom_enroll(sid, cid):
+@sio.on("chat_member")
+async def get_chat_member(sid, cid):
+    chatId = str(cid)
+    await sio.emit("chat_member_update",await get_chat_member(chatId),to=sid)
 
-        creator = client_manager.getUserWithSID(sid)
-        creator_id = creator["sub"]
-
-        try:
-            async with sessionmanager.session() as db:
-                new_relation = user_belong_to_chat(uid=creator_id ,cid=cid)
-                db.add()
-                await db.commit()
-            await client_manager.broadcastToRoom(sio,"chatroom_enrollment","New Client!",cid)
-        except :
-            print("Chatroom Enrollment failed!")
-            pass
+@sio.on("chat_enroll")
+async def enroll_chat_member(sid, cid):
+    chatId = str(cid)
+    async with sessionmanager.session() as db :
+        requestedUser = client_manager.getUserWithSID(sid)
+        if requestedUser is not None :
+            user_b2c = user_belong_to_chat(uid=requestedUser["sub"], cid=cid)
+            db.add(user_b2c)
+            await db.commit()
+            await sio.emit("chat_member_update",await get_chat_member(chatId),to=sid)

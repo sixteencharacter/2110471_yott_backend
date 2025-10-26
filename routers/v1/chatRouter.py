@@ -16,16 +16,6 @@ async def get_all_available_chatroom(userData : Annotated[dict,Depends(validate_
 
     return JSONResponse(chats.all())
 
-@router.get("/{chatId}/members")
-async def list_chat_member(chatId : str,userData : Annotated[dict,Depends(validate_access_token)],db : AsyncSession = Depends(get_db)) :
-    query = """
-        select P.uid , P.given_name , P.family_name , preferred_username from yott_user_belong_to_chat R
-        join yott_person P on R.uid = P.uid
-        where R.cid = :chatId
-    """
-    members = await db.execute(text(query),{"chatId" : int(chatId)})
-    return JSONResponse(populate_query_result(members))
-
 @router.get("/{chatId}/history")
 async def list_chat_history(
     chatId : str ,
