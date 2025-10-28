@@ -12,17 +12,9 @@ router = APIRouter(prefix="/chats",tags=["chat"])
 
 @router.get("/")
 async def get_all_available_chatroom(userData : Annotated[dict,Depends(validate_access_token)],db : AsyncSession = Depends(get_db)):
-    chats = await db.execute(select(Chat))
-    result = chats.scalars().all()
-    # Convert to serializable format
-    chat_list = []
-    for chat in result:
-        chat_list.append({
-            "cid": chat.cid,
-            "name": chat.name,
-            "is_groupchat": chat.is_groupchat
-        })
-    return JSONResponse(chat_list)
+    chats = await db.execute(select(Chat.cid, Chat.name, Chat.is_groupchat, Chat.timestamp))
+
+    return JSONResponse(populate_query_result(chats))
 
 @router.get("/{chatId}/history")
 async def list_chat_history(
