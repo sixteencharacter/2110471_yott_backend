@@ -1,0 +1,14 @@
+{
+    "package": "Royal Stickers Pack",
+    "size": [768, 768],
+    "pictures": [
+        "./pic/A_1.png",
+        "./pic/A_2.png",
+        "./pic/A_3.png",
+        "./pic/A_4.png",
+        "./pic/A_5.png",
+        "./pic/A_6.png",
+        "./pic/A_7.png",
+        "./pic/A_8.png"
+    ]
+}
