@@ -29,7 +29,7 @@ services:
       ports:
           - 5435:5432
       volumes:
-          - pgdata:/var/lib/postgresql/data
+          - pgdata:/var/lib/postgresql
 
   pgadmin:
     image: dpage/pgadmin4
@@ -41,6 +41,16 @@ services:
         - 5555:80
     depends_on:
         - db
+
+  ollama:
+    build:
+      context: ./ollama # Path to the directory containing the Dockerfile
+      dockerfile: Dockerfile # Optional: specify if not named 'Dockerfile' or in a different location
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ollama:/root/.ollama
+    entrypoint: ["/bin/sh", "/root/.ollama/run-ollama.sh"]
 
 volumes:
     pgdata:

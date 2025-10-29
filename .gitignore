@@ -214,3 +214,8 @@ __marimo__/
 test*
 
 migrations/versions/*.py
+
+ollama/models/*
+
+ollama/id_ed25519
+ollama/id_ed25519.pub
