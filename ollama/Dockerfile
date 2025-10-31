@@ -1,15 +1,11 @@
-# Use official Python base image
+# Ultra-simple Dockerfile - just start Ollama
 FROM ollama/ollama
 
-# Set working directory inside the container
-WORKDIR /root/.ollama
+# Copy Modelfile to a location
+COPY Modelfile /tmp/Modelfile
 
-# Copy only requirements first (for efficient caching)
-COPY . .
-
-# Install dependencies
-RUN chmod +x build-ollama.sh && ./build-ollama.sh
-
-# Expose Ollama default port
+# Just start Ollama directly - no custom models during build
 EXPOSE 11434
 
+# Use the default entrypoint from the base image
+CMD ["serve"]

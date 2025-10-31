@@ -49,9 +49,11 @@ services:
     ports:
       - "11434:11434"
     volumes:
-      - ./ollama:/root/.ollama
-    entrypoint: ["/bin/sh", "/root/.ollama/run-ollama.sh"]
+      - ollama-data:/root/.ollama
+    # Use the CMD from Dockerfile instead of custom entrypoint
+    # entrypoint: ["ollama", "serve"]
 
 volumes:
     pgdata:
+    ollama-data:
 
