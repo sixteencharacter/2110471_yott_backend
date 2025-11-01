@@ -48,6 +48,13 @@ class SocketIOManager :
             self.room_mapper[roomId] = set()
         if cid in self.user_mapper :
             self.room_mapper[roomId].add(cid)
+    
+    def getSIDbyUID(self,uid) :
+        available = set([k for k,v in self.user_mapper.items() if v["sub"] == uid])
+        if len(available) == 0 or len(available) > 1 :
+            return None
+        else :
+            return list(available)[0]
 
     async def broadcastToRoom(self,sio_client : socketio.AsyncServer,topic : str , payload : Any , roomId : str) :
         new_user_room_list = set()
@@ -233,7 +240,12 @@ async def create_chat(sid, chat_data):
             "is_groupchat": is_groupchat_final,
             "member_ids": member_ids
         }, room=str(chat_id))
-        await updateChatRoomToUser(sio,sid)
+
+        for x in member_ids :
+            retrieved_sid = client_manager.getSIDbyUID(x)
+            print("retr>",retrieved_sid)
+            if retrieved_sid is not None :
+                await updateChatRoomToUser(sio,retrieved_sid)
 
     except Exception as e:
         print(f"❌ Error creating chat: {e}")
