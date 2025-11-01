@@ -24,7 +24,7 @@ class StickerManager :
                 try :
                     with open(f,"r") as fp :
                         manifest_data = json.load(fp)
-                        manifest_data["pictures"] = [BASE_STICKER_PATH + x for x in manifest_data["pictures"]]
+                        # manifest_data["pictures"] = [BASE_STICKER_PATH + x for x in manifest_data["pictures"]]
                         self.available_manifest_mapping[manifest_data["package"]] = manifest_data
                 except :
                     pass

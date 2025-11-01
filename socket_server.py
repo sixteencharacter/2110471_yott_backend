@@ -242,7 +242,8 @@ async def send_message(sid, data):
         Expected data format:
         {
             "cid": "chat_id",
-            "message": "Hello!"
+            "message": "Hello!",
+            "type" : "message"|"sticker"
         }
     """
     creator = client_manager.getUserWithSID(sid)
@@ -250,6 +251,7 @@ async def send_message(sid, data):
 
     chat_id = data["cid"]
     message = str(data["message"])
+    mtype = str(data["type"])
     print(f"Private message from {creator_id} -> {chat_id}: {message}")
 
     # Create a proper Message model instance
@@ -257,6 +259,7 @@ async def send_message(sid, data):
         s_id=creator_id,
         data=message,
         cid=chat_id,
+        mtype=mtype
     )
     try:
 
@@ -271,7 +274,8 @@ async def send_message(sid, data):
             "s_name" : creator["preferred_username"],
                 "message": message,
                 "timestamp": timestamp,
-            "cid": chat_id
+            "cid": chat_id,
+            "type" : mtype
         },roomId=str(chat_id))
 
     except Exception as e:
