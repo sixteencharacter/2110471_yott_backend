@@ -294,4 +294,4 @@ async def enroll_chat_member(sid, cid):
             user_b2c = user_belong_to_chat(uid=requestedUser["sub"], cid=cid)
             db.add(user_b2c)
             await db.commit()
-            await sio.emit("chat_member_update",await get_chat_member(chatId),to=sid)
+            await sio.emit("chat_member_update",await get_chat_member(sid,chatId),to=sid)

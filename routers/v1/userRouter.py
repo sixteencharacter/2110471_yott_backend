@@ -6,6 +6,7 @@ from sqlalchemy import select
 from utils import validate_access_token , get_db
 from models import Chat, user_belong_to_chat
 from icecream import ic
+from services import stickerManager
 
 router = APIRouter(prefix="/user",tags=["user"])
 
@@ -16,7 +17,7 @@ async def get_all_available_chatroom(userData : Annotated[dict,Depends(validate_
 @router.get("/manifest")
 async def get_all_available_chatroom(userData : Annotated[dict,Depends(validate_access_token)]):
     return JSONResponse({
-        "sticker_set_owned" : []
+        "sticker" : stickerManager.get_user_sticker_access(userData)
     })
 
 @router.get("/chats")
