@@ -1,0 +1,15 @@
+{
+    "package": "Animal Stickers Pack",
+    "size": [
+        768,
+        768
+    ],
+    "pictures": [
+        "/assets/stickers/02/B_1.png",
+        "/assets/stickers/02/B_2.png",
+        "/assets/stickers/02/B_3.png",
+        "/assets/stickers/02/B_4.png",
+        "/assets/stickers/02/B_5.png",
+        "/assets/stickers/02/B_6.png"
+    ]
+}
