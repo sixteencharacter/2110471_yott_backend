@@ -10,6 +10,7 @@ class Message(Base):
     data = Column(Text())
     s_id = Column(Text, ForeignKey("yott_person.uid")) #sender id
     cid = Column(Integer, ForeignKey("yott_chat.cid")) #chat id
+    mtype = Column(Text,default="message")
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     
     def __repr__(self):

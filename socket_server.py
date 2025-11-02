@@ -1,7 +1,7 @@
 from utils import validate_accessToken_without_raise , populate_query_result
 import socketio
 from services import sessionmanager
-from sqlalchemy import select , text
+from sqlalchemy import select , text , exists
 from models import Person , Chat , user_belong_to_chat , Message
 from typing import Dict , Any , List , Set
 from datetime import datetime
@@ -48,6 +48,13 @@ class SocketIOManager :
             self.room_mapper[roomId] = set()
         if cid in self.user_mapper :
             self.room_mapper[roomId].add(cid)
+    
+    def getSIDbyUID(self,uid) :
+        available = set([k for k,v in self.user_mapper.items() if v["sub"] == uid])
+        if len(available) == 0 or len(available) > 1 :
+            return None
+        else :
+            return list(available)[0]
 
     async def broadcastToRoom(self,sio_client : socketio.AsyncServer,topic : str , payload : Any , roomId : str) :
         new_user_room_list = set()
@@ -80,6 +87,7 @@ async def connect(sid,env):
     else :
         client_manager.add_client(sid,userData)
     await broadcast_user_list()
+    await updateChatRoomToUser(sio,sid)
 
 
 @sio.on("disconnect")
@@ -134,6 +142,28 @@ async def getChatMembers(chatId : str) :
         members = await db.execute(text(query),{"chatId" : int(chatId)})
         all_chats = populate_query_result(members)
         return all_chats
+    
+async def updateChatRoomToUser(sio : socketio.AsyncServer ,sid : str) :
+    uid = client_manager.getUserWithSID(sid)["sub"]
+    async with sessionmanager.session() as db:
+
+        chats = await db.execute(
+            select(Chat)
+            .join(user_belong_to_chat, Chat.cid == user_belong_to_chat.cid)
+            .where(user_belong_to_chat.uid == uid)
+        )
+        chats = chats.scalars().all()
+        
+        chat_list = []
+
+        for chat in chats:
+            chat_list.append({
+                "cid": chat.cid,
+                "name": chat.name,
+                "is_groupchat": chat.is_groupchat
+            })
+
+        await sio.emit("available_chat",chat_list,to=sid)
 
 @sio.on('create_chat')
 async def create_chat(sid, chat_data):
@@ -211,6 +241,12 @@ async def create_chat(sid, chat_data):
             "member_ids": member_ids
         }, room=str(chat_id))
 
+        for x in member_ids :
+            retrieved_sid = client_manager.getSIDbyUID(x)
+            print("retr>",retrieved_sid)
+            if retrieved_sid is not None :
+                await updateChatRoomToUser(sio,retrieved_sid)
+
     except Exception as e:
         print(f"❌ Error creating chat: {e}")
         await sio.emit("chat_creation_error", {"message": f"Error: {str(e)}"}, room=sid)
@@ -223,7 +259,7 @@ async def join_chat(sid, cid):
     await sio.emit("user_joined", {"user_id": sid}, to=sid)
 
     await sio.emit("chat_member_update",await getChatMembers(cid),sid)
-    await client_manager.broadcastToRoom(sio,"chat_member_update",await getChatMembers(cid),cid)
+    await client_manager.broadcastToRoom(sio,"chat_member_update",await getChatMembers(cid),str(cid))
 
 @sio.on('leave_chat')
 async def leave_chat(sid, cid):
@@ -242,7 +278,8 @@ async def send_message(sid, data):
         Expected data format:
         {
             "cid": "chat_id",
-            "message": "Hello!"
+            "message": "Hello!",
+            "type" : "message"|"sticker"
         }
     """
     creator = client_manager.getUserWithSID(sid)
@@ -250,6 +287,7 @@ async def send_message(sid, data):
 
     chat_id = data["cid"]
     message = str(data["message"])
+    mtype = str(data["type"])
     print(f"Private message from {creator_id} -> {chat_id}: {message}")
 
     # Create a proper Message model instance
@@ -257,6 +295,7 @@ async def send_message(sid, data):
         s_id=creator_id,
         data=message,
         cid=chat_id,
+        mtype=mtype
     )
     try:
 
@@ -271,7 +310,8 @@ async def send_message(sid, data):
             "s_name" : creator["preferred_username"],
                 "message": message,
                 "timestamp": timestamp,
-            "cid": chat_id
+            "cid": chat_id,
+            "type" : mtype
         },roomId=str(chat_id))
 
     except Exception as e:
@@ -290,8 +330,13 @@ async def enroll_chat_member(sid, cid):
     chatId = str(cid)
     async with sessionmanager.session() as db :
         requestedUser = client_manager.getUserWithSID(sid)
+        uid = requestedUser["sub"]
         if requestedUser is not None :
-            user_b2c = user_belong_to_chat(uid=requestedUser["sub"], cid=cid)
-            db.add(user_b2c)
-            await db.commit()
-            await sio.emit("chat_member_update",await get_chat_member(chatId),to=sid)
+            is_record_exists = await db.execute(select(exists(user_belong_to_chat).where(user_belong_to_chat.uid == uid).where(user_belong_to_chat.cid == cid)))
+            if not is_record_exists.fetchone()[0] :
+                user_b2c = user_belong_to_chat(uid=requestedUser["sub"], cid=cid)
+                db.add(user_b2c)
+                await db.commit()
+                await sio.emit("chat_member_update",await getChatMembers(chatId),to=sid)
+                await client_manager.broadcastToRoom(sio,"chat_member_update",await getChatMembers(chatId),str(cid))
+                await updateChatRoomToUser(sio,sid)

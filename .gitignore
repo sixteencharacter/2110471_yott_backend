@@ -24,7 +24,7 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
+# MANIFEST
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -216,6 +216,7 @@ test*
 migrations/versions/*.py
 
 ollama/models/*
-
+ollama/models
+ollama/history
 ollama/id_ed25519
 ollama/id_ed25519.pub

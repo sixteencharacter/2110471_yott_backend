@@ -24,7 +24,7 @@ async def list_chat_history(
     skip : int = 0,
     db : AsyncSession = Depends(get_db)) :
     query = """
-        select P.uid , P.given_name , P.family_name , P.preferred_username , M.data as msg_content , M."timestamp"
+        select P.uid , P.given_name , P.family_name , P.preferred_username , M.data as msg_content , M.mtype as type , M."timestamp"
         from yott_message M
         join yott_person P on M.s_id = P.uid
         where cid = :chatId order by M."timestamp" DESC
