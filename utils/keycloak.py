@@ -31,29 +31,35 @@ async def validate_access_token(
             options={"verify_exp": True},
         )
 
-        async with sessionmanager.session() as session:
-            new_user = Person(
-                family_name = data["family_name"],
-                given_name = data["given_name"],
-                preferred_username = data["preferred_username"],
-                email = data["email"],
-                uid = data["sub"]
-            )
-            existing_user = (await session.get(Person,new_user.uid))
+        try :
+            async with sessionmanager.session() as session:
+                new_user = Person(
+                    family_name = data["family_name"],
+                    given_name = data["given_name"],
+                    preferred_username = data["preferred_username"],
+                    email = data["email"],
+                    uid = data["sub"]
+                )
+                existing_user = (await session.get(Person,new_user.uid))
 
-            if kc_user_cache.get(new_user.uid) is None : # if cache missed
-                if existing_user is not None:
-                    existing_user.family_name = new_user.family_name
-                    existing_user.given_name = new_user.given_name
-                    existing_user.preferred_username = new_user.preferred_username
-                    existing_user.email = new_user.email
-                    await session.commit()
-                else :
-                    session.add(new_user)
-                    await session.commit()
-                    await session.refresh(new_user)
+                if kc_user_cache.get(new_user.uid) is None : # if cache missed
+                    if existing_user is not None:
+                        existing_user.family_name = new_user.family_name
+                        existing_user.given_name = new_user.given_name
+                        existing_user.preferred_username = new_user.preferred_username
+                        existing_user.email = new_user.email
+                        await session.commit()
+                    else :
+                        session.add(new_user)
+                        await session.commit()
+                        await session.refresh(new_user)
 
-                kc_user_cache.set(new_user.uid,True)
+                    kc_user_cache.set(new_user.uid,True)
+                    print("[LOG] Saved new user to database and cached token")
+        except :
+
+            print("[LOG] Failed to save user and cache token , the object may not available upon the request time")
+
         return data
     except InvalidTokenError as err:
         print(err)
