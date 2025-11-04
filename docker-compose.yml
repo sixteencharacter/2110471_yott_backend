@@ -3,6 +3,7 @@ services:
   keycloak:
     restart : always
     image: keycloak/keycloak:latest
+    user: root
     ports:
       - "8080:8080"
     volumes:
@@ -15,6 +16,7 @@ services:
       KC_HOSTNAME_STRICT_HTTPS: false
       KC_HOSTNAME_STRICT : false
       KC_HTTP_ENABLED : true
+      KC_HOSTNAME : 34.124.199.242
     command : 
       - start-dev
 
