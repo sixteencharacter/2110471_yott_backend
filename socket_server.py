@@ -288,7 +288,7 @@ async def send_message(sid, data):
     chat_id = data["cid"]
     message = str(data["message"])
     mtype = str(data["type"])
-    print(f"Private message from {creator_id} -> {chat_id}: {message}")
+    print(f"message from {creator_id} -> {chat_id}: {message}")
 
     # Create a proper Message model instance
     new_message = Message(
