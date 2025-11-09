@@ -244,6 +244,10 @@ async def create_chat(sid, chat_data):
         # add self-loopback broadccase
         await updateChatRoomToUser(sio,sid)
 
+        if is_groupchat :
+            for u in list(client_manager.user_mapper) :
+                await updateChatRoomToUser(sio,u)
+
         for x in member_ids :
             retrieved_sid = client_manager.getSIDbyUID(x)
             print("retr>",retrieved_sid)

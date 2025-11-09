@@ -25,7 +25,7 @@ async def paraphrase_to_royal_stream(
         async def generate_stream():
             ollama_payload = {
                 "model": "yott-agent", 
-                "prompt": f"paraphrase {request.text} in the first-person-manner", 
+                "prompt": f"paraphrase sentence \"{request.text}\" in the first-person manner.",
                 "stream": True
             }
             
