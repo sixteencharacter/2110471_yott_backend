@@ -38,7 +38,7 @@ async def paraphrase_to_royal_stream(
                 stream=True,
                 timeout=(10, 120)  # (connect_timeout, read_timeout)
             ) as response:
-                
+                print(response.content)
                 if response.status_code != 200:
                     yield f"data: {json.dumps({'error': f'Ollama API error: {response.status_code}'})}\n\n"
                     return

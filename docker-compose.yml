@@ -13,10 +13,12 @@ services:
     environment :
       KEYCLOAK_ADMIN : yott
       KEYCLOAK_ADMIN_PASSWORD : strongpassword
-      KC_HOSTNAME_STRICT_HTTPS: false
+      KC_HOSTNAME_STRICT_HTTPS: true
       KC_HOSTNAME_STRICT : false
-      KC_HTTP_ENABLED : true
-      KC_HOSTNAME : 34.124.199.242
+      KC_HTTP_ENABLED : false
+      KC_HOSTNAME : auth.yott.me
+      PROXY_ADDRESS_FORWARDING: true
+      KC_PROXY_HEADERS: "xforwarded"
     command : 
       - start-dev
 
