@@ -143,23 +143,42 @@ async def getChatMembers(chatId : str) :
         all_chats = populate_query_result(members)
         return all_chats
     
+async def getAllAvailableChatForUser(uid : str) :
+    query = """
+        select * from (
+            with foo as (select distinct C.cid, C.name , C.is_groupchat , TRUE as is_own
+                from yott_chat C
+                join yott_user_belong_to_chat R on R.cid = C.cid
+                join yott_person P on P.uid = R.uid
+                where P.uid = :userId
+            )
+            select * from foo
+            union
+            select distinct C.cid, C.name , C.is_groupchat , FALSE as is_own
+            from yott_chat C
+            join yott_user_belong_to_chat R on R.cid = C.cid
+            where C.cid not in (select cid from foo)
+        )
+    """
+    async with sessionmanager.session() as db:
+        chat_query = await db.execute(text(query),{"userId" : str(uid)})
+        all_chats = populate_query_result(chat_query)
+        return all_chats
+    
 async def updateChatRoomToUser(sio : socketio.AsyncServer ,sid : str) :
     uid = client_manager.getUserWithSID(sid)["sub"]
     async with sessionmanager.session() as db:
 
-        chats = await db.execute(
-            select(Chat)
-            .join(user_belong_to_chat, Chat.cid == user_belong_to_chat.cid,isouter=True)
-        )
-        chats = chats.scalars().all()
+        chats = await getAllAvailableChatForUser(uid)
         
         chat_list = []
 
         for chat in chats:
             chat_list.append({
-                "cid": chat.cid,
-                "name": chat.name,
-                "is_groupchat": chat.is_groupchat
+                "cid": chat["cid"],
+                "name": chat["name"],
+                "is_groupchat": chat["is_groupchat"],
+                "is_own" : chat["is_own"]
             })
 
         await sio.emit("available_chat",chat_list,to=sid)
