@@ -330,7 +330,7 @@ async def send_message(sid, data):
 @sio.on("chat_member")
 async def get_chat_member(sid, cid):
     chatId = str(cid)
-    await sio.emit("chat_member_update",await get_chat_member(chatId),to=sid)
+    await sio.emit("chat_member_update",await getChatMembers(chatId),to=sid)
 
 @sio.on("chat_enroll")
 async def enroll_chat_member(sid, cid):
