@@ -149,8 +149,7 @@ async def updateChatRoomToUser(sio : socketio.AsyncServer ,sid : str) :
 
         chats = await db.execute(
             select(Chat)
-            .join(user_belong_to_chat, Chat.cid == user_belong_to_chat.cid)
-            .where(user_belong_to_chat.uid == uid)
+            .join(user_belong_to_chat, Chat.cid == user_belong_to_chat.cid,isouter=True)
         )
         chats = chats.scalars().all()
         
