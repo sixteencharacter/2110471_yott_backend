@@ -24,7 +24,12 @@ This repository contains the backend for the Yott project. It uses Docker Compos
 - Download the .env file from <ask your pal> and place it in the root directory of the folder
 - Install python modules with `pip install -r requirements.txt`
 - Run main.py with `python main.py`
-- run the scripts `alembic upgrade head` to sync the database with the schema
+
+## Update Database
+1. after fixing any db model you should commit to db using 
+`alembic revision --autogenerate -m "commit msg"` then do second step
+2. run the scripts `alembic upgrade head` to sync the database with the schema
+
 ## Quick start
 
 1. Ensure the `keycloak` folder (extracted from the Google Drive zip) is placed at the repository root as described in Prerequisites.

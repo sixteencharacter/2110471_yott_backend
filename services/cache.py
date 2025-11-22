@@ -18,3 +18,4 @@ class Cache:
         return None
     
 kc_user_cache = Cache(60*10) # 10 minute cache
+kc_socketio_cache = Cache(60*60) # 1hr cache

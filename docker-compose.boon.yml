@@ -13,23 +13,25 @@ services:
       KEYCLOAK_ADMIN : yott
       KEYCLOAK_ADMIN_PASSWORD : strongpassword
       KC_HOSTNAME_STRICT_HTTPS: false
-      KC_HOSTNAME_STRICT : false
-      KC_HTTP_ENABLED : true
     command : 
       - start-dev
+    networks:
+      - iboon_network
 
   db:
-      image: postgres
-      restart: always
-      shm_size: 128mb
-      environment:
-          POSTGRES_PASSWORD: strongpassword
-          POSTGRES_USER: yott
-          POSTGRES_DB: yottdb
-      ports:
-          - 5435:5432
-      volumes:
-          - pgdata:/var/lib/postgresql
+    image: postgres
+    restart: always
+    shm_size: 128mb
+    environment:
+        POSTGRES_PASSWORD: strongpassword
+        POSTGRES_USER: yott
+        POSTGRES_DB: yottdb
+    ports:
+        - 5435:5432
+    volumes:
+        - pgdata:/var/lib/postgresql/data
+    networks:
+      - iboon_network
 
   pgadmin:
     image: dpage/pgadmin4
@@ -41,19 +43,22 @@ services:
         - 5555:80
     depends_on:
         - db
-
-  ollama:
+        
+  iboon_fastapi:
     build:
-      context: ./ollama # Path to the directory containing the Dockerfile
+      context: . # Path to the directory containing the Dockerfile
       dockerfile: Dockerfile # Optional: specify if not named 'Dockerfile' or in a different location
     ports:
-      - "11434:11434"
+      - "8000:8000"
     volumes:
-      - ollama-data:/root/.ollama
-    # Use the CMD from Dockerfile instead of custom entrypoint
-    # entrypoint: ["ollama", "serve"]
+      - .:/app
+    networks:
+      - iboon_network
+
+networks:
+  iboon_network:
+    driver: bridge
 
 volumes:
     pgdata:
-    ollama-data:
 
